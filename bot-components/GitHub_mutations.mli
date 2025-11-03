@@ -99,3 +99,12 @@ val send_status_check :
   -> context:string
   -> description:string
   -> unit Lwt.t
+
+val add_remove_labels :
+  bot_info:Bot_info.t -> add:bool -> issue_info -> string list -> unit Lwt.t
+
+val add_labels_if_absent :
+  bot_info:Bot_info.t -> issue_info -> string list -> unit
+
+val remove_labels_if_present :
+  bot_info:Bot_info.t -> issue_info -> string list -> unit

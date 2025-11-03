@@ -281,3 +281,57 @@ let send_status_check ~bot_info ~repo_full_name ~commit ~state ~url ~context
   HTTP_utils.send_request ~body ~uri
     (HTTP_utils.github_header bot_info)
     bot_info.github_name
+
+let add_remove_labels ~bot_info ~add (issue : issue_info) labels =
+  let open Lwt.Syntax in
+  let* labels =
+    let open Lwt.Infix in
+    labels
+    |> Lwt_list.filter_map_p (fun label ->
+           GitHub_queries.get_label ~bot_info ~owner:issue.issue.owner
+             ~repo:issue.issue.repo ~label
+           >|= function
+           | Ok (Some label) ->
+               Some label
+           | Ok None ->
+               (* Warn when a label is not found *)
+               (fun () ->
+                 Lwt_io.printlf
+                   "Warning: Label %s not found in repository %s/%s." label
+                   issue.issue.owner issue.issue.repo )
+               |> Lwt.async ;
+               None
+           | Error err ->
+               (* Print any other error, but do not prevent acting on other labels *)
+               (fun () ->
+                 Lwt_io.printlf
+                   "Error while querying for label %s in repository %s/%s: %s"
+                   label issue.issue.owner issue.issue.repo err )
+               |> Lwt.async ;
+               None )
+  in
+  match labels with
+  | [] ->
+      (* Nothing to do *)
+      Lwt.return_unit
+  | _ ->
+      if add then add_labels ~bot_info ~issue:issue.id ~labels
+      else remove_labels ~bot_info ~issue:issue.id ~labels
+
+let add_labels_if_absent ~bot_info (issue : issue_info) labels =
+  (* We construct the list of labels to add by filtering out the labels that
+     are already present. *)
+  (fun () ->
+    List.filter labels ~f:(fun label ->
+        not (List.mem issue.labels label ~equal:String.equal) )
+    |> add_remove_labels ~bot_info ~add:true issue )
+  |> Lwt.async
+
+let remove_labels_if_present ~bot_info (issue : issue_info) labels =
+  (* We construct the list of labels to remove by keeping only the labels that
+     are present. *)
+  (fun () ->
+    List.filter labels ~f:(fun label ->
+        List.mem issue.labels label ~equal:String.equal )
+    |> add_remove_labels ~bot_info ~add:false issue )
+  |> Lwt.async
