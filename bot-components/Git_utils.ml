@@ -3,6 +3,7 @@ open GitHub_types
 open Lwt.Infix
 open Lwt.Syntax
 open Utils
+open Bot_info
 
 let report_status ?(mask = []) ?(stderr_content = "") command report code =
   let stderr =
@@ -108,6 +109,18 @@ let parse_gitlab_repo_url ~http_repo_url =
   else
     Result.Ok
       (Str.matched_group 1 http_repo_url, Str.matched_group 2 http_repo_url)
+
+let init_git_bare_repository ~bot_info =
+  let* () = Lwt_io.printl "Initializing repository..." in
+  "git init --bare"
+  |&& f {|git config user.email "%s"|} bot_info.email
+  |&& f {|git config user.name "%s"|} bot_info.github_name
+  |> execute_cmd ~mask:[bot_info.github_pat]
+  >>= function
+  | Ok _ ->
+      Lwt_io.printl "Bare repository initialized."
+  | Error e ->
+      Lwt_io.printlf "Error while initializing bare repository: %s." e
 
 let parse_gitlab_repo_url_and_print ~http_repo_url =
   match parse_gitlab_repo_url ~http_repo_url with

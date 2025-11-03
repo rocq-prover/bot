@@ -1,8 +1,20 @@
 (library
  (name Bot_components)
  (public_name bot-components)
- (libraries base camlzip cohttp-lwt-unix eqaf ohex mirage-crypto stdio str
-   x509 yojson ISO8601 digestif toml)
+ (libraries
+  base
+  camlzip
+  cohttp-lwt-unix
+  eqaf
+  ohex
+  mirage-crypto
+  stdio
+  str
+  x509
+  yojson
+  ISO8601
+  digestif
+  toml)
  (private_modules GraphQL_query GitHub_GraphQL)
  (modules_without_implementation GitHub_types GitLab_types)
  (inline_tests)
@@ -41,9 +53,12 @@
  (action
   (with-stdout-to
    %{targets}
-   (run get-graphql-schema --json --header
-     "Authorization=Bearer %{read-strings:.github-token}"
-     https://api.github.com/graphql)))
+   (run
+    get-graphql-schema
+    --json
+    --header
+    "Authorization=Bearer %{read-strings:.github-token}"
+    https://api.github.com/graphql)))
  (mode promote))
 
 (env

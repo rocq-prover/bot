@@ -5,9 +5,9 @@ open Bot_components
 open Bot_components.GitHub_types
 open Bot_components.GitHub_GitLab_sync
 open Bench_utils
-open Helpers
 open String_utils
 open Utils
+open Bot_components.Git_utils
 open Lwt.Infix
 
 (* Handles push events for different repositories (e.g., Rocq community, Math Comp, etc.) *)
