@@ -16,8 +16,9 @@ module BenchResults = struct
     ; fast_table: string
     ; fast_number: int }
 end
+
 (******************************************************************************)
-(* CI Job Info and Benchmark Utilities                                       *)
+(* CI Job Info and Benchmark Utilities                                        *)
 (******************************************************************************)
 
 let fetch_bench_results ~job_info () =
