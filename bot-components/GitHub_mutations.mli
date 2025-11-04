@@ -108,3 +108,6 @@ val add_labels_if_absent :
 
 val remove_labels_if_present :
   bot_info:Bot_info.t -> issue_info -> string list -> unit
+
+val inform_user_not_in_contributors :
+  bot_info:Bot_info.t -> comment_info:GitHub_types.comment_info -> unit Lwt.t

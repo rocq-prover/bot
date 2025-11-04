@@ -199,7 +199,6 @@ let download ~uri dest =
 
 let download_to ~uri chan =
   download_cps ~uri ~with_file:(fun write_to -> write_to chan)
-
 (******************************************************************************)
 (* Artifact Fetching Utilities                                                *)
 (******************************************************************************)

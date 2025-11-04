@@ -4,10 +4,10 @@ open GitHub_types
 open Bot_info
 open Utils
 open String_utils
-open Cohttp
-open Cohttp_lwt_unix
 open Lwt.Infix
 open Lwt.Syntax
+
+type build_failure = Warn of string | Retry of string | Ignore of string
 
 (******************************************************************************)
 (* Types                                                                      *)
@@ -27,15 +27,12 @@ type run_ci_minimization_error =
       {url: string; artifact: artifact_info; artifact_error: artifact_error}
   | DownloadError of {url: string; error: string}
 
-module BenchResults = struct
-  type t =
-    { summary_table: string
-    ; failures: string
-    ; slow_table: string
-    ; slow_number: int
-    ; fast_table: string
-    ; fast_number: int }
-end
+type rocq_job_info =
+  { docker_image: string
+  ; dependencies: string list
+  ; targets: string list
+  ; compiler: string
+  ; opam_variant: string }
 
 type ci_minimization_info =
   { target: string
@@ -83,12 +80,51 @@ type ci_pr_minimization_suggestion =
   | RunAutomatically
   | Silent of string
 
-type rocq_job_info =
-  { docker_image: string
-  ; dependencies: string list
-  ; targets: string list
-  ; compiler: string
-  ; opam_variant: string }
+(******************************************************************************)
+(* GitLab Trace Processing Utilities                                         *)
+(******************************************************************************)
+
+let trace_action ~repo_full_name trace =
+  trace |> String.length
+  |> Lwt_io.printlf "Trace size: %d."
+  >>= fun () ->
+  Lwt.return
+    (let test regexp = string_match ~regexp trace in
+     if test "Job failed: exit code 137" then Retry "Exit code 137"
+     else if test "Job failed: exit status 255" then Retry "Exit status 255"
+     else if test "Job failed (system failure)" then Retry "System failure"
+     else if
+       ( test "Uploading artifacts.*to coordinator... failed"
+       || test "Uploading artifacts.*to coordinator... error" )
+       && not (test "Uploading artifacts.*to coordinator... ok")
+     then Retry "Artifact uploading failure"
+     else if
+       test "ERROR: Downloading artifacts.*from coordinator... error"
+       && test "FATAL: invalid argument"
+     then Retry "Artifact downloading failure"
+     else if
+       test "transfer closed with outstanding read data remaining"
+       || test "HTTP request sent, awaiting response... 50[0-9]"
+       || test "The requested URL returned error: 502"
+       || test "received unexpected HTTP status: 50[0-9]"
+       || test "unexpected status from GET request to.*: 50[0-9]"
+       || test "error: unable to download 'https://cache.nixos.org/"
+       || test "fatal: unable to access .* Couldn't connect to server"
+       || test "fatal: unable to access .* Could not resolve host"
+       || test "Resolving .* failed: Temporary failure in name resolution"
+       || test "unexpected status code .*: 401 Unauthorized"
+     then Retry "Connectivity issue"
+     else if test "fatal: reference is not a tree" then
+       Ignore "Normal failure: pull request was force-pushed."
+     else if
+       test "fatal: Remote branch pr-[0-9]* not found in upstream origin"
+       || test "fatal: [Cc]ouldn't find remote ref refs/heads/pr-"
+     then Ignore "Normal failure: pull request was closed."
+     else if
+       String.equal repo_full_name "coq/coq"
+       && test "Error response from daemon: manifest for .* not found"
+     then Ignore "Docker image not found. Do not report anything specific."
+     else Warn trace )
 
 (******************************************************************************)
 (* Pipeline Summary and Error Formatting                                      *)
@@ -194,106 +230,6 @@ let accumulate_extra_minimizer_arguments options =
         else Lwt.return_unit )
       >>= fun () -> Lwt.return_nil )
   >>= fun inline_stdlib_args -> inline_stdlib_args @ extra_args |> Lwt.return
-
-(******************************************************************************)
-(* Artifact Fetching Utilities                                               *)
-(******************************************************************************)
-
-let fetch_artifact url =
-  url |> Uri.of_string |> Client.get
-  >>= fun (resp, body) ->
-  let status_code = resp |> Response.status |> Code.code_of_status in
-  if Int.equal 200 status_code then
-    body |> Cohttp_lwt.Body.to_string >>= Lwt.return_ok
-  else Lwt.return_error (f "Recieved status %d from %s." status_code url)
-
-(******************************************************************************)
-(* CI Job Info and Benchmark Utilities                                       *)
-(******************************************************************************)
-
-let fetch_bench_results ~job_info () =
-  let open BenchResults in
-  let open Lwt.Syntax in
-  let artifact_url file =
-    f
-      "https://coq.gitlabpages.inria.fr/-/coq/-/jobs/%d/artifacts/_bench/timings/%s"
-      job_info.build_id file
-  in
-  let* summary_table = artifact_url "bench_summary" |> fetch_artifact in
-  let* failures =
-    let* failures_or_err = artifact_url "bench_failures" |> fetch_artifact in
-    match failures_or_err with
-    | Ok s ->
-        Lwt.return s
-    | Error err ->
-        Lwt_io.printlf "Error fetching bench_failures: %s" err
-        >>= fun () -> Lwt.return ""
-  in
-  let* slow_table =
-    let* slow_table_or_err = artifact_url "slow_table.html" |> fetch_artifact in
-    match slow_table_or_err with
-    | Ok s ->
-        Lwt.return s
-    | Error _ -> (
-        let* slow_table_or_err = artifact_url "slow_table" |> fetch_artifact in
-        match slow_table_or_err with
-        | Ok s ->
-            Lwt.return (code_wrap s)
-        | Error err ->
-            Lwt_io.printlf "Error fetching slow_table: %s" err
-            >>= fun () -> Lwt.return "" )
-  in
-  let* fast_table =
-    let* fast_table_or_err = artifact_url "fast_table.html" |> fetch_artifact in
-    match fast_table_or_err with
-    | Ok s ->
-        Lwt.return s
-    | Error _ -> (
-        let* fast_table_or_err = artifact_url "fast_table" |> fetch_artifact in
-        match fast_table_or_err with
-        | Ok s ->
-            Lwt.return (code_wrap s)
-        | Error err ->
-            Lwt_io.printlf "Error fetching fast_table: %s" err
-            >>= fun () -> Lwt.return "" )
-  in
-  match summary_table with
-  | Error e ->
-      Lwt.return_error
-        (f "Could not fetch table artifacts for bench summary: %s\n" e)
-  | Ok summary_table -> (
-      (* The tables include how many entries there are, this is useful
-         information to know. *)
-      let* slow_number = parse_quantity slow_table "slow" in
-      let* fast_number = parse_quantity fast_table "fast" in
-      match (slow_number, fast_number) with
-      | Error e, _ | _, Error e ->
-          Lwt.return_error (f "Fetch bench regex issue: %s" e)
-      | Ok slow_number, Ok fast_number ->
-          Lwt.return_ok
-            { summary_table
-            ; failures
-            ; slow_table
-            ; slow_number
-            ; fast_table
-            ; fast_number } )
-
-let bench_text = function
-  | Ok results ->
-      (* Formatting helpers *)
-      let header2 str = f "## %s" str in
-      (* Document *)
-      let open BenchResults in
-      [ header2 ":checkered_flag: Bench Summary:"
-      ; code_wrap results.summary_table
-      ; results.failures
-      ; header2 @@ f ":turtle: Top %d slow downs:" results.slow_number
-      ; results.slow_table
-      ; header2 @@ f ":rabbit2: Top %d speed ups:" results.fast_number
-      ; results.fast_table ]
-      |> String.concat ~sep:"\n" |> Lwt.return
-  | Error e ->
-      f "Error occured when creating bench summary: %s\n" e |> Lwt.return
 
 (******************************************************************************)
 (* GitHub Artifact Parsing                                                   *)
@@ -485,16 +421,6 @@ let send_status_check ~bot_info job_info ~pr_num (gh_owner, gh_repo)
             ()
         | Error e ->
             Lwt_io.printf "No repo id: %s\n" e )
-
-let inform_user_not_in_contributors ~bot_info ~comment_info =
-  GitHub_mutations.post_comment ~bot_info ~id:comment_info.issue.id
-    ~message:
-      (f
-         "Sorry, @%s, I only accept requests from members of the \
-          `@rocq-prover/contributors` team. If you are a regular contributor, \
-          you can request to join the team by asking any core developer."
-         comment_info.author )
-  >>= Utils.report_on_posting_comment
 
 (******************************************************************************)
 (* CI Minimization Core Functions                                            *)
