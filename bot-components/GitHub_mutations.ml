@@ -3,6 +3,7 @@ open GitHub_types
 open Cohttp_lwt_unix
 open Lwt
 open Utils
+open Git_utils
 
 let send_graphql_query = GraphQL_query.send_graphql_query ~api:GitHub
 
@@ -345,3 +346,24 @@ let inform_user_not_in_contributors ~bot_info ~comment_info =
           you can request to join the team by asking any core developer."
          comment_info.author )
   >>= report_on_posting_comment
+
+let pull_request_closed_action ~bot_info
+    (pr_info : issue_info pull_request_info) ~gitlab_mapping ~github_mapping
+    ~remove_milestone_if_not_merged =
+  let open Lwt.Infix in
+  (let open GitHub_GitLab_sync in
+   gitlab_ci_ref_for_github_pr ~issue:pr_info.issue.issue ~gitlab_mapping
+     ~github_mapping ~bot_info )
+  >>= (function
+        | Ok remote_ref ->
+            git_delete ~remote_ref |> execute_cmd >|= ignore
+        | Error err ->
+            Lwt_io.printlf "Error: %s" err )
+  <&>
+  if remove_milestone_if_not_merged && not pr_info.merged then
+    Lwt_io.printf
+      "PR was closed without getting merged: remove the milestone.\n"
+    >>= fun () -> remove_milestone pr_info.issue.issue ~bot_info
+  else
+    (* TODO: if PR was merged in master without a milestone, post an alert *)
+    Lwt.return_unit

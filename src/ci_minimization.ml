@@ -1305,9 +1305,9 @@ let ci_minimize ~bot_info ~comment_info ~requests ~comment_on_error ~options
 
 let run_coq_minimizer ~bot_info ~script ~comment_thread_id ~comment_author
     ~owner ~repo ~options ~minimizer_url =
-  let options = format_options_for_getopts options in
+  let options = CI_utils.format_options_for_getopts options in
   let getopt_version opt =
-    options |> getopt ~opt |> Str.replace_first (Str.regexp "^[vV]") ""
+    options |> CI_utils.getopt ~opt |> Str.replace_first (Str.regexp "^[vV]") ""
   in
   accumulate_extra_minimizer_arguments options
   >>= fun minimizer_extra_arguments ->

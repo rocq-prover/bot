@@ -305,8 +305,7 @@ let pipeline_action ~bot_info ({common_info= {http_repo_url}} as pipeline_info)
           pipeline_info.common_info.project_id pipeline_info.pipeline_id
       in
       match
-        GitHub_GitLab_sync.github_repo_of_gitlab_url ~gitlab_mapping
-          ~http_repo_url
+        Git_utils.github_repo_of_gitlab_url ~gitlab_mapping ~http_repo_url
       with
       | Error err ->
           Lwt_io.printlf "Error in pipeline action: %s" err
@@ -402,8 +401,8 @@ let pipeline_action ~bot_info ({common_info= {http_repo_url}} as pipeline_info)
                   Lwt_io.printf "No repo id: %s\n" e
               | Ok repo_id -> (
                   let summary =
-                    Bot_components.CI_utils.create_pipeline_summary ?summary_top
-                      pipeline_info pipeline_url
+                    CI_utils.create_pipeline_summary ?summary_top pipeline_info
+                      pipeline_url
                   in
                   GitHub_mutations.create_check_run ~bot_info
                     ~name:

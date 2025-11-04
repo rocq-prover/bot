@@ -90,6 +90,14 @@ val update_milestone_pull_request :
 
 val remove_milestone : bot_info:Bot_info.t -> issue -> unit Lwt.t
 
+val pull_request_closed_action :
+     bot_info:Bot_info.t
+  -> issue_info pull_request_info
+  -> gitlab_mapping:(string, string) Base.Hashtbl.t
+  -> github_mapping:(string, string * string) Base.Hashtbl.t
+  -> remove_milestone_if_not_merged:bool
+  -> unit Lwt.t
+
 val send_status_check :
      bot_info:Bot_info.t
   -> repo_full_name:string

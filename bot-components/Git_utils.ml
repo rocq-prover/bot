@@ -152,3 +152,35 @@ let%expect_test "http_repo_url_parsing_example_from_gitlab_docs" =
     {|
   GitLab domain: "gitlab.example.com"
   GitLab repository full name: "gitlab-org/gitlab-test" |}]
+
+let github_repo_of_gitlab_url ~gitlab_mapping ~http_repo_url =
+  parse_gitlab_repo_url ~http_repo_url
+  |> Result.map ~f:(fun (gitlab_domain, gitlab_repo_full_name) ->
+         (* Note: This function is also available in GitHub_GitLab_sync, but we
+            define it here to avoid circular dependencies *)
+         let full_name_with_domain =
+           gitlab_domain ^ "/" ^ gitlab_repo_full_name
+         in
+         let github_full_name =
+           match Hashtbl.find gitlab_mapping full_name_with_domain with
+           | Some github_full_name ->
+               github_full_name
+           | None ->
+               failwith
+                 (f
+                    "No GitHub repository mapping found for GitLab repository \
+                     %s"
+                    full_name_with_domain )
+         in
+         let owner, repo =
+           match String.split ~on:'/' github_full_name with
+           | [owner; repo] ->
+               (owner, repo)
+           | _ ->
+               failwith
+                 (f
+                    "Invalid GitHub repository name format: %s (expected \
+                     owner/repo)"
+                    github_full_name )
+         in
+         (owner, repo) )

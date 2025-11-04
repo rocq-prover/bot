@@ -29,4 +29,9 @@ val pr_from_branch : string -> int option * string
 val parse_gitlab_repo_url :
   http_repo_url:string -> (string * string, string) result
 
+val github_repo_of_gitlab_url :
+     gitlab_mapping:(string, string) Base.Hashtbl.t
+  -> http_repo_url:string
+  -> (string * string, string) result
+
 val init_git_bare_repository : bot_info:Bot_info.t -> unit Lwt.t
