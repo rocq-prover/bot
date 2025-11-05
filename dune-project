@@ -1,54 +1,99 @@
 (lang dune 2.2)
+
 (name coq-bot)
 
 (generate_opam_files true)
 
-(source (github coq/bot))
+(source
+ (github coq/bot))
+
 (authors "Théo Zimmermann")
+
 (maintainers "Théo Zimmermann <theo.zimmermann@inria.fr>")
+
 (license MIT)
 
 (package
  (name coq-bot)
  (synopsis "A (Coq Development Team) bot written in OCaml")
  (depends
-  (dune (>= 2.2))
-  (base (>= v0.14.0))
-  (lwt (>= 5.6.0))
-  (cohttp-lwt (>= 2.5.4))
-  (cohttp-lwt-unix (>= 2.5.4))
-  (lwt_ssl (>= 1.1.3))
-  (ssl (>= 0.5.9))
-  (mirage-crypto (>= 1.0.0))
-  (mirage-crypto-rng (>= 1.0.0))
-  (mirage-crypto-rng-lwt (>= 1.0.0))
-  (stdio (>= v0.14.0))
-  (yojson (>= 1.7.0))
+  (dune
+   (>= 2.2))
+  (base
+   (>= v0.14.0))
+  (lwt
+   (>= 5.6.0))
+  (cohttp-lwt
+   (>= 2.5.4))
+  (cohttp-lwt-unix
+   (>= 2.5.4))
+  (lwt_ssl
+   (>= 1.1.3))
+  (ssl
+   (>= 0.5.9))
+  (mirage-crypto
+   (>= 1.0.0))
+  (mirage-crypto-rng
+   (>= 1.0.0))
+  (mirage-crypto-rng-lwt
+   (>= 1.0.0))
+  (stdio
+   (>= v0.14.0))
+  (yojson
+   (>= 1.7.0))
   (bot-components :dev)
-  (toml (>= 7.0.0))
-  (ppx_expect (>= v0.15.1))
-  (odoc (and (>= 1.5.2) :with-doc)))
-)
+  (toml
+   (>= 7.0.0))
+  (ppx_expect
+   (>= v0.15.1))
+  (alcotest
+   (and
+    (>= 1.7.0)
+    :with-test))
+  (odoc
+   (and
+    (>= 1.5.2)
+    :with-doc))))
+
 (package
  (name bot-components)
  (synopsis "Building blocks to make your own bots")
  (depends
-  (dune (>= 2.2))
-  (base (>= v0.14.0))
-  (lwt (>= 5.3.0))
-  (cohttp-lwt (>= 2.5.4))
-  (cohttp-lwt-unix (>= 2.5.4))
-  (lwt_ssl (>= 1.1.3))
-  (ssl (>= 0.5.9))
-  (stdio (>= v0.14.0))
-  (ohex (>= 0.2.0))
-  (mirage-crypto (>= 1.0.0))
-  (eqaf (>= 0.7))
-  (yojson (>= 1.7.0))
-  (graphql_ppx (>= 1.2.0))
-  (x509 (>= 1.0.0))
-  (ISO8601 (>= 0.2.0))
-  (camlzip (>= 1.08))
-  (digestif (>= 1.2.0))
-  (odoc (and (>= 1.5.2) :with-doc)))
-)
+  (dune
+   (>= 2.2))
+  (base
+   (>= v0.14.0))
+  (lwt
+   (>= 5.3.0))
+  (cohttp-lwt
+   (>= 2.5.4))
+  (cohttp-lwt-unix
+   (>= 2.5.4))
+  (lwt_ssl
+   (>= 1.1.3))
+  (ssl
+   (>= 0.5.9))
+  (stdio
+   (>= v0.14.0))
+  (ohex
+   (>= 0.2.0))
+  (mirage-crypto
+   (>= 1.0.0))
+  (eqaf
+   (>= 0.7))
+  (yojson
+   (>= 1.7.0))
+  (graphql_ppx
+   (>= 1.2.0))
+  (x509
+   (>= 1.0.0))
+  (ISO8601
+   (>= 0.2.0))
+  (camlzip
+   (>= 1.08))
+  (digestif
+   (>= 1.2.0))
+  (odoc
+   (and
+    (>= 1.5.2)
+    :with-doc))))
