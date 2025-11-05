@@ -8,11 +8,12 @@ let git_coq_bug_minimizer ~bot_info ~script ~comment_thread_id ~comment_author
   (* To push a new branch we need to identify as coqbot the GitHub
      user, who is a collaborator on the run-coq-bug-minimizer repo,
      not coqbot the GitHub App *)
+  let github_token = github_token bot_info in
   Stdlib.Filename.quote_command "./coq_bug_minimizer.sh"
     [ script
     ; GitHub_ID.to_string comment_thread_id
     ; comment_author
-    ; bot_info.github_pat
+    ; github_token
     ; bot_info.github_name
     ; bot_info.domain
     ; owner
@@ -20,7 +21,7 @@ let git_coq_bug_minimizer ~bot_info ~script ~comment_thread_id ~comment_author
     ; coq_version
     ; ocaml_version
     ; String.concat ~sep:" " minimizer_extra_arguments ]
-  |> execute_cmd ~mask:[bot_info.github_pat]
+  |> execute_cmd ~mask:[github_token]
 
 let git_run_ci_minimization ~bot_info ~comment_thread_id ~owner ~repo ~pr_number
     ~docker_image ~target ~ci_targets ~opam_switch ~failing_urls ~passing_urls
@@ -28,8 +29,9 @@ let git_run_ci_minimization ~bot_info ~comment_thread_id ~owner ~repo ~pr_number
   (* To push a new branch we need to identify as coqbot the GitHub
      user, who is a collaborator on the run-coq-bug-minimizer repo,
      not coqbot the GitHub App *)
+  let github_token = github_token bot_info in
   ( [ GitHub_ID.to_string comment_thread_id
-    ; bot_info.github_pat
+    ; github_token
     ; bot_info.github_name
     ; bot_info.domain
     ; owner
@@ -47,4 +49,4 @@ let git_run_ci_minimization ~bot_info ~comment_thread_id ~owner ~repo ~pr_number
   @
   match bug_file_name with Some bug_file_name -> [bug_file_name] | None -> [] )
   |> Stdlib.Filename.quote_command "./run_ci_minimization.sh"
-  |> execute_cmd ~mask:[bot_info.github_pat]
+  |> execute_cmd ~mask:[github_token]

@@ -13,9 +13,6 @@ val bot_email : Toml.Types.table -> string
 
 val github_bot_name : Toml.Types.table -> string
 
-(* TODO: remove when legacy PAT mode is removed *)
-val github_access_token : Toml.Types.table -> string
-
 val github_app_id : Toml.Types.table -> int
 
 val github_webhook_secret : Toml.Types.table -> string

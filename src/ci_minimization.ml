@@ -1387,14 +1387,10 @@ let coq_bug_minimizer_results_action ~bot_info ~ci ~key ~app_id body =
                ~message:(if ci then message else f "@%s, %s" author message) )
           >>= Utils.report_on_posting_comment
           <&> ( Git_utils.execute_cmd
-                  (* To delete the branch we need to identify as
-                     coqbot the GitHub user, who is a collaborator on
-                     the run-coq-bug-minimizer repo, not coqbot the
-                     GitHub App *)
-                  (* TODO: direct PAT usage *)
                   (f "git push https://%s:%s@github.com/%s.git --delete '%s"
-                     bot_info.github_name bot_info.github_pat repo_name
-                     branch_name )
+                     bot_info.github_name
+                     (Bot_info.github_token bot_info)
+                     repo_name branch_name )
               >>= function
               | Ok () ->
                   Lwt.return_unit

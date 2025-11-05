@@ -21,7 +21,6 @@ let headers_of_list = headers
 
 (* GitHub authorization header builder *)
 let github_header bot_info =
-  (* TODO: github_token is deprecated when the legacy mode is removed *)
   [("Authorization", "bearer " ^ github_token bot_info)]
 
 (* GitHub API preview headers *)
