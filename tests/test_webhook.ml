@@ -72,8 +72,11 @@ let test_webhook_with_installation_id () =
   | Error msg ->
       Alcotest.fail (Printf.sprintf "Parsing failed: %s" msg)
 
-(* Webhook payload WITHOUT installation.id (legacy mode - will be removed)
-   Identical to payload above, except missing the "installation" field *)
+(* Webhook payload WITHOUT installation.id (legacy webhook format)
+   Identical to payload above, except missing the "installation" field.
+   Note: After PAT removal, webhooks without installation.id are still accepted
+   by receive_github, but any action requiring GitHub API access will fail
+   because action_as_github_app requires a GitHub App installation. *)
 let payload_without_installation_id =
   {|{
     "action": "opened",
@@ -125,24 +128,26 @@ let test_webhook_without_installation_id () =
   in
   match result with
   | Ok (None, _) ->
-      (* Currently accepts webhooks without installation.id (legacy mode)
-         TODO: After PAT removal, this should return an error instead *)
       Alcotest.(check bool)
-        "Webhook without installation.id accepted (legacy mode)" true true
+        "Webhook without installation.id accepted by parser (actions will \
+         require installation)"
+        true true
   | Ok (Some install_id, _) ->
       Alcotest.fail
         (Printf.sprintf "Should not have installation.id, but got: %d"
            install_id )
   | Error msg ->
-      (* After PAT removal, this should be the expected behavior *)
       Alcotest.fail
         (Printf.sprintf
-           "Webhook rejected (this will be expected after PAT removal): %s" msg )
+           "Webhook parsing failed unexpectedly (valid webhook without \
+            installation.id should succeed): %s"
+           msg )
 
 let () =
   Alcotest.run "Webhook tests"
     [ ( "webhook parsing"
       , [ ("with installation.id", `Quick, test_webhook_with_installation_id)
-        ; ( "without installation.id (legacy - will be removed)"
+        ; ( "without installation.id (legacy format accepted, actions require \
+             installation)"
           , `Quick
           , test_webhook_without_installation_id ) ] ) ]
