@@ -9,7 +9,7 @@ open Base
 let test_uses_github_app_token_when_available () =
   let bot_info =
     { Bot_info.github_pat= "legacy_pat"
-    ; github_install_token= Some "install_toke_123"
+    ; github_install_token= Some "install_token_123"
     ; github_name= "testbot"
     ; email= "test@example.com"
     ; domain= "test.com"

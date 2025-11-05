@@ -1,3 +1,11 @@
+(env
+ (dev
+  (flags :standard -w -9)))
+
 (test
  (name test_bot_info)
- (libraries alcotest bot-components botlib lwt lwt.unix yojson base))
+ (libraries alcotest bot-components botlib base))
+
+(test
+ (name test_webhook)
+ (libraries alcotest bot-components botlib base cohttp))
