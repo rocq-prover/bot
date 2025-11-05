@@ -71,6 +71,7 @@ let action_as_github_app ~bot_info ~key ~app_id ~owner action =
             action_as_github_app_from_install_id ~bot_info ~key ~app_id
               ~install_id action
         | None ->
+            (* TODO: remove this fallback when the legacy mode is removed *)
             (* If the owner does not have the GitHub app installed,
                we execute the action with the github access token. *)
             action ~bot_info )

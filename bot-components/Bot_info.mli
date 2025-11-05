@@ -1,5 +1,6 @@
 type t =
   { gitlab_instances: (string, string * string) Base.Hashtbl.t
+        (* TODO: remove github_pat field when legacy mode is removed *)
   ; github_pat: string
   ; github_install_token: string option
   ; github_name: string
