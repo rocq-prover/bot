@@ -1391,6 +1391,7 @@ let coq_bug_minimizer_results_action ~bot_info ~ci ~key ~app_id body =
                      coqbot the GitHub user, who is a collaborator on
                      the run-coq-bug-minimizer repo, not coqbot the
                      GitHub App *)
+                  (* TODO: direct PAT usage *)
                   (f "git push https://%s:%s@github.com/%s.git --delete '%s"
                      bot_info.github_name bot_info.github_pat repo_name
                      branch_name )

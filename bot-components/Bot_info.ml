@@ -2,6 +2,7 @@ open Base
 
 type t =
   { gitlab_instances: (string, string * string) Hashtbl.t
+        (* TODO: remove github_pat field when legacy mode is removed *)
   ; github_pat: string
   ; github_install_token: string option
   ; github_name: string
@@ -9,11 +10,13 @@ type t =
   ; domain: string
   ; app_id: int }
 
+(* TODO: github_token is deprecated when the legacy mode is removed *)
 let github_token bot_info =
   match bot_info.github_install_token with
   | Some t ->
       t
   | None ->
+      (* TODO: remove this fallback when the legacy mode is removed *)
       bot_info.github_pat
 
 let gitlab_name_and_token bot_info gitlab_domain =

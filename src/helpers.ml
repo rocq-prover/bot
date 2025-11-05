@@ -11,7 +11,7 @@ let init_git_bare_repository ~bot_info =
   "git init --bare"
   |&& f {|git config user.email "%s"|} bot_info.email
   |&& f {|git config user.name "%s"|} bot_info.github_name
-  |> execute_cmd ~mask:[bot_info.github_pat]
+  |> execute_cmd ~mask:[bot_info.github_pat] (* TODO: direct PAT usage *)
   >>= function
   | Ok _ ->
       Lwt_io.printl "Bare repository initialized."

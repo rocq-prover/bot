@@ -19,6 +19,7 @@ let send_graphql_query ~bot_info ?(extra_headers = []) ?(ignore_errors = false)
   | GitLab gitlab_domain ->
       gitlab_name_and_token bot_info gitlab_domain
   | GitHub ->
+      (* TODO: github_token is deprecated when the legacy mode is removed *)
       Ok (bot_info.github_name, github_token bot_info) )
   |> Lwt.return
   >>= fun (name, token) ->

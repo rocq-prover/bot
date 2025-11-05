@@ -220,10 +220,28 @@ let handle_github_webhook ~bot_info ~key ~app_id ~github_bot_name
     ~resume_ci_minimize_text_of_body =
   body
   >>= fun body ->
-  match
+  let result =
     GitHub_subscriptions.receive_github ~secret:github_webhook_secret headers
       body
-  with
+  in
+  (* TODO: these logs are only for debugging purposes,
+     should be removed when the legacy mode is removed *)
+  ( match result with
+  | Ok (Some install_id, _) ->
+      (fun () ->
+        Lwt_io.printf "[GitHub App] Webhook received with installation.id=%d\n"
+          install_id )
+      |> Lwt.async
+  | Ok (None, _) ->
+      (fun () ->
+        Lwt_io.printf
+          "[WARNING: Legacy Mode] Webhook received WITHOUT installation.id - \n\n\
+          \        Will attempt PAT fallback (will fail with invalid token)" )
+      |> Lwt.async
+  | Error err ->
+      (fun () -> Lwt_io.printf "[ERROR] Webhook processing failed: %s" err)
+      |> Lwt.async ) ;
+  match result with
   | Ok
       ( Some install_id
       , PushEvent
