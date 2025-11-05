@@ -206,14 +206,8 @@ Notes:
 - Installation as a GitHub App is still in an experimental stage
 and you may frequently receive requests to expand permissions.
 
-- All the repositories that use the bot and belong to the same
-owner must install the bot using the same method (GitHub App or
-regular user).
-
-- If you were previously using the legacy installation method,
-make sure you disable any previously set up GitHub webhooks when
-switching to the GitHub App, otherwise the bot will receive every
-request twice.
+- The bot requires GitHub App installation. The legacy installation
+method using Personal Access Tokens (PAT) is no longer supported.
 
 The bot can be installed as a GitHub App to either your account or
 organization ([link to app](https://github.com/apps/coqbot-app)).
@@ -271,32 +265,6 @@ Once you finish the installation, follow these steps:
   configuration file becomes `BOT_NAME.toml` where `BOT_NAME` is the name
   of the bot.
 
-### As a regular user account (legacy)
-
-The bot used to be given access to each of your GitHub repositories as a
-regular GitHub user account (**@coqbot**). This installation method is
-still supported for repositories that haven't migrated to the GitHub App
-yet. Here are the steps to follow in addition to those described in the 
-`As GitHub App` section:
-
-- In your GitHub repository:
-
-  - go to "Settings" / "Manage access" to add
-    [**@coqbot**](https://github.com/coqbot) as a collaborator with
-    the "Write" role (so that it can push status checks, and set
-    labels).
-
-    Currently, every invitation requires a manual validation, so there
-    may be some lag before **@coqbot** can push status checks
-    to your repository.
-
-  - go to "Settings" / "Webhooks" and add one webhook with URL
-    <https://coqbot.herokuapp.com/github> that will only be triggered
-    at least by pull request events, and if you want to use the issue
-    milestone feature, by issue events as well.  Make sure you change
-    the "content/type" value to "application/json".
-
-  
 
 ## Architecture ##
 
@@ -352,7 +320,6 @@ to [Heroku](https://www.heroku.com/). Simply follow the official
 The bot will need to read a few environment variables so make sure
 these are configured in your Heroku app:
 
-- `GITHUB_ACCESS_TOKEN` (can also be defined in the configuration file as `github.api_token`)
 - `GITLAB_ACCESS_TOKEN` (can also be defined for each GitLab instance through the configuration file as `api_token` or through an environment variable whose name is defined in the configuration file as `api_token_env_var`)
 - `GITHUB_WEBHOOK_SECRET` (can also be defined in the configuration file as `github.webhook_secret`)
 - `GITLAB_WEBHOOK_SECRET` (can also be defined in the configuration file as `gitlab.webhook_secret`, will default to `GITHUB_WEBHOOK_SECRET` if not defined)
