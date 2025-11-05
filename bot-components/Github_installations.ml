@@ -71,10 +71,12 @@ let action_as_github_app ~bot_info ~key ~app_id ~owner action =
             action_as_github_app_from_install_id ~bot_info ~key ~app_id
               ~install_id action
         | None ->
-            (* TODO: remove this fallback when the legacy mode is removed *)
-            (* If the owner does not have the GitHub app installed,
-               we execute the action with the github access token. *)
-            action ~bot_info )
+            (* TODO: use Result.t later *)
+            failwith
+              (f
+                 "GitHub App is not installed for owner '%s'. Please install \
+                  the GitHub App to use this feature."
+                 owner ) )
       | Error err ->
           failwith
             (f "We did not manage to get the list of installations: %s" err) )

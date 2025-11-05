@@ -7,9 +7,6 @@ let toml_data = Utils.toml_of_file (Sys.get_argv ()).(1)
 
 let port = Config.port toml_data
 
-(* TODO: remove when legacy PAT mode is removed *)
-let github_access_token = Config.github_access_token toml_data
-
 let github_webhook_secret = Config.github_webhook_secret toml_data
 
 (* TODO: make webhook secret project-specific *)
@@ -24,9 +21,7 @@ let key = Config.github_private_key ()
 let app_id = Config.github_app_id toml_data
 
 let bot_info : Bot_components.Bot_info.t =
-  (* TODO: remove github_pat field when legacy mode is removed *)
-  { github_pat= github_access_token
-  ; github_install_token= None
+  { github_install_token= None
   ; gitlab_instances= Config.gitlab_instances toml_data
   ; github_name= github_bot_name
   ; email= Config.bot_email toml_data
