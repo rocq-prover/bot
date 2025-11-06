@@ -12,7 +12,7 @@ With the release of **OCaml 5**, a new concurrency model based on _effect handle
 
 The objective of this internship is to design and implement a gradual migration of an existing OCaml codebase from Lwt to Eio, while maintaining functional integrity and performance.
 
-The project will give the student hands-on experience with OCaml 5's new concurrency model, morden systems programming, and contribute to the modernization of a real-world software system.
+The project will give the student hands-on experience with OCaml 5's new concurrency model, modern systems programming, and contribute to the modernization of a real-world software system.
 
 ### Proposed Work Plan
 
