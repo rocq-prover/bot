@@ -16,12 +16,12 @@ let handle_stale_pr_check ~bot_info ~key ~app_id ~daily_schedule_secret ~body =
         (fun () ->
           Bot_components.Github_installations.action_as_github_app ~bot_info
             ~key ~app_id ~owner
-            (Actions_pr_sync.rocq_check_needs_rebase_pr ~owner ~repo ~warn_after
+            (Pr_sync.rocq_check_needs_rebase_pr ~owner ~repo ~warn_after
                ~close_after ~throttle:6 )
           >>= fun () ->
           Bot_components.Github_installations.action_as_github_app ~bot_info
             ~key ~app_id ~owner
-            (Actions_pr_sync.rocq_check_stale_pr ~owner ~repo ~after:close_after
+            (Pr_sync.rocq_check_stale_pr ~owner ~repo ~after:close_after
                ~throttle:4 ) )
         |> Lwt.async ;
         Server.respond_string ~status:`OK ~body:"Stale pull requests updated" ()

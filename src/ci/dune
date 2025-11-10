@@ -1,0 +1,6 @@
+(library
+ (name ci)
+ (public_name coq-bot.ci)
+ (libraries base bot-components coq-bot.utils)
+ (wrapped false)
+ (modules documentation job_status job_status_rocq minimization))

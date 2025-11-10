@@ -66,8 +66,6 @@ type ci_pr_minimization_suggestion =
 (* CI Minimization Parsing Utilities                                          *)
 (******************************************************************************)
 
-val parse_quantity : string -> string -> (int, string) Result.t Lwt.t
-
 val accumulate_extra_minimizer_arguments : string -> string list Lwt.t
 
 val run_ci_minimization_error_to_string : run_ci_minimization_error -> string

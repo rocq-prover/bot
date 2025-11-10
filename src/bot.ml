@@ -45,19 +45,18 @@ let callback _conn req body =
   (* print_endline "Request received."; *)
   match path with
   | "/job" | "/pipeline" (* legacy endpoints *) | "/gitlab" ->
-      Webhook_gitlab.handle_gitlab_webhook ~bot_info ~key ~app_id
-        ~gitlab_mapping ~gitlab_webhook_secret ~headers:(Request.headers req)
-        ~body
+      Gitlab.handle_gitlab_webhook ~bot_info ~key ~app_id ~gitlab_mapping
+        ~gitlab_webhook_secret ~headers:(Request.headers req) ~body
   | "/push" | "/pull_request" (* legacy endpoints *) | "/github" ->
-      Webhook_github.handle_github_webhook ~bot_info ~key ~app_id
-        ~github_bot_name ~gitlab_mapping ~github_mapping ~github_webhook_secret
+      Github.handle_github_webhook ~bot_info ~key ~app_id ~github_bot_name
+        ~gitlab_mapping ~github_mapping ~github_webhook_secret
         ~headers:(Request.headers req) ~body ~minimize_text_of_body
         ~ci_minimize_text_of_body ~resume_ci_minimize_text_of_body
   | "/coq-bug-minimizer" | "/ci-minimization" | "/resume-ci-minimization" ->
-      Webhook_minimizer.handle_minimizer_webhook ~bot_info ~key ~app_id
-        ~endpoint:path ~body
+      Minimizer.handle_minimizer_webhook ~bot_info ~key ~app_id ~endpoint:path
+        ~body
   | "/check-stale-pr" ->
-      Webhook_scheduled.handle_stale_pr_check ~bot_info ~key ~app_id
+      Scheduled.handle_stale_pr_check ~bot_info ~key ~app_id
         ~daily_schedule_secret ~body
   | _ ->
       Server.respond_not_found ()

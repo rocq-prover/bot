@@ -3,7 +3,7 @@ open Cohttp
 open Cohttp_lwt_unix
 open Bot_components
 open Bot_components.GitHub_GitLab_sync
-open Ci_job_status
+open Job_status
 open Lwt.Infix
 open Utils
 
@@ -24,7 +24,7 @@ let handle_gitlab_webhook ~bot_info ~key ~app_id ~gitlab_mapping
         (fun () ->
           Bot_components.Github_installations.action_as_github_app ~bot_info
             ~key ~app_id ~owner
-            (Actions_job.job_action ~gitlab_mapping job_info) )
+            (Job.job_action ~gitlab_mapping job_info) )
         |> Lwt.async ;
         Server.respond_string ~status:`OK ~body:"Job event." () )
   | Ok (_, PipelineEvent ({common_info= {http_repo_url}} as pipeline_info)) -> (
