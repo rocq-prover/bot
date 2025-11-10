@@ -1,0 +1,6 @@
+(library
+ (name actions)
+ (public_name coq-bot.actions)
+ (libraries base bot-components coq-bot.config coq-bot.utils coq-bot.ci)
+ (wrapped false)
+ (modules backport job pr_sync))

@@ -7,6 +7,12 @@ open HTTP_utils
 open String_utils
 open Lwt.Infix
 
+let parse_quantity table table_name =
+  let regexp = {|.*TOP \([0-9]*\)|} in
+  if string_match ~regexp table then
+    Str.matched_group 1 table |> Int.of_string |> Lwt.return_ok
+  else Lwt.return_error (f "parsing %s table." table_name)
+
 module BenchResults = struct
   type t =
     { summary_table: string
@@ -74,8 +80,8 @@ let fetch_bench_results ~job_info () =
   | Ok summary_table -> (
       (* The tables include how many entries there are, this is useful
          information to know. *)
-      let* slow_number = Ci_minimization.parse_quantity slow_table "slow" in
-      let* fast_number = Ci_minimization.parse_quantity fast_table "fast" in
+      let* slow_number = parse_quantity slow_table "slow" in
+      let* fast_number = parse_quantity fast_table "fast" in
       match (slow_number, fast_number) with
       | Error e, _ | _, Error e ->
           Lwt.return_error (f "Fetch bench regex issue: %s" e)

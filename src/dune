@@ -1,22 +1,24 @@
-(library
- (name botlib)
- (libraries base bot-components cohttp-lwt-unix mirage-crypto
-   mirage-crypto-rng mirage-crypto-rng-lwt stdio toml yojson)
- (modules :standard \ bot webhook_gitlab webhook_github webhook_minimizer
-   webhook_scheduled)
- (wrapped false)
- (inline_tests)
- (preprocess
-  (pps ppx_expect)))
-
 (executable
  (name bot)
  (public_name bot)
  (package coq-bot)
- (modules bot webhook_gitlab webhook_github webhook_minimizer
-   webhook_scheduled)
+ (modules bot)
  (promote (until-clean))
- (libraries botlib))
+ (libraries
+  base
+  bot-components
+  cohttp-lwt-unix
+  mirage-crypto
+  mirage-crypto-rng
+  mirage-crypto-rng-lwt
+  stdio
+  toml
+  yojson
+  coq-bot.config
+  coq-bot.webhooks
+  coq-bot.actions
+  coq-bot.ci
+  coq-bot.utils))
 
 (env
  (dev

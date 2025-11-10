@@ -429,10 +429,10 @@ let pipeline_action ~bot_info ({common_info= {http_repo_url}} as pipeline_info)
                     , Some pr_number )
                     when String.equal owner min_owner
                          && String.equal repo min_repo ->
-                      Ci_minimization.minimize_failed_tests ~bot_info
+                      Minimization.minimize_failed_tests ~bot_info
                         ~owner:gh_owner ~repo:gh_repo ~pr_number
                         ~head_pipeline_summary:(Some summary)
-                        ~request:Ci_minimization.Auto ~comment_on_error:false
+                        ~request:Minimization.Auto ~comment_on_error:false
                         ~options:"" ~bug_file:None
                         ?base_sha:pipeline_info.common_info.base_commit
                         ~head_sha:pipeline_info.common_info.head_commit ()

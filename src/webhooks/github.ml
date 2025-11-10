@@ -4,7 +4,7 @@ open Cohttp_lwt_unix
 open Bot_components
 open Bot_components.GitHub_types
 open Bot_components.GitHub_GitLab_sync
-open Bench_utils
+open Bench
 open Helpers
 open String_utils
 open Utils
@@ -84,7 +84,7 @@ let handle_comment_created ~bot_info ~key ~app_id ~github_bot_name
         >>= fun () ->
         Bot_components.Github_installations.action_as_github_app ~bot_info ~key
           ~app_id ~owner:comment_info.issue.issue.owner (fun ~bot_info ->
-            Ci_minimization.run_coq_minimizer ~bot_info ~script
+            Minimization.run_coq_minimizer ~bot_info ~script
               ~comment_thread_id:comment_info.issue.id
               ~comment_author:comment_info.author
               ~owner:comment_info.issue.issue.owner
@@ -106,7 +106,7 @@ let handle_comment_created ~bot_info ~key ~app_id ~github_bot_name
           >>= fun () ->
           Bot_components.Github_installations.action_as_github_app ~bot_info
             ~key ~app_id ~owner:comment_info.issue.issue.owner (fun ~bot_info ->
-              Ci_minimization.ci_minimize ~bot_info ~comment_info ~requests
+              Minimization.ci_minimize ~bot_info ~comment_info ~requests
                 ~comment_on_error:true ~options ~bug_file:(Some bug_file) ) )
         |> Lwt.async ;
         Server.respond_string ~status:`OK
@@ -120,7 +120,7 @@ let handle_comment_created ~bot_info ~key ~app_id ~github_bot_name
             Bot_components.Github_installations.action_as_github_app ~bot_info
               ~key ~app_id ~owner:comment_info.issue.issue.owner
               (fun ~bot_info ->
-                Ci_minimization.ci_minimize ~bot_info ~comment_info ~requests
+                Minimization.ci_minimize ~bot_info ~comment_info ~requests
                   ~comment_on_error:true ~options ~bug_file:None ) )
           |> Lwt.async ;
           Server.respond_string ~status:`OK ~body:"Handling CI minimization." ()
@@ -151,8 +151,8 @@ let handle_comment_created ~bot_info ~key ~app_id ~github_bot_name
             >>= fun () ->
             Bot_components.Github_installations.action_as_github_app ~bot_info
               ~key ~app_id ~owner:comment_info.issue.issue.owner
-              (Actions_pr_sync.run_ci_action ~comment_info ?full_ci
-                 ~gitlab_mapping ~github_mapping () )
+              (Pr_sync.run_ci_action ~comment_info ?full_ci ~gitlab_mapping
+                 ~github_mapping () )
           else if
             string_match
               ~regexp:(f "@%s:? [Mm]erge now" @@ Str.quote github_bot_name)
@@ -234,7 +234,7 @@ let handle_github_webhook ~bot_info ~key ~app_id ~github_bot_name
         >>= fun () ->
         Bot_components.Github_installations.action_as_github_app_from_install_id
           ~bot_info ~key ~app_id ~install_id
-          (Actions_backport.rocq_push_action ~base_ref ~commits_msg)
+          (Backport.rocq_push_action ~base_ref ~commits_msg)
         <&> Bot_components.Github_installations
             .action_as_github_app_from_install_id ~bot_info ~key ~app_id
               ~install_id
@@ -272,8 +272,8 @@ let handle_github_webhook ~bot_info ~key ~app_id ~github_bot_name
       >>= fun () ->
       Bot_components.Github_installations.action_as_github_app ~bot_info ~key
         ~app_id ~owner:pr_info.issue.issue.owner
-        (Actions_pr_sync.pull_request_updated_action ~action ~pr_info
-           ~gitlab_mapping ~github_mapping )
+        (Pr_sync.pull_request_updated_action ~action ~pr_info ~gitlab_mapping
+           ~github_mapping )
   | Ok (_, IssueClosed {issue}) ->
       (* TODO: only for projects that requested this feature *)
       (fun () ->
@@ -324,7 +324,7 @@ let handle_github_webhook ~bot_info ~key ~app_id ~github_bot_name
             >>= fun () ->
             Bot_components.Github_installations.action_as_github_app ~bot_info
               ~key ~app_id ~owner:issue_info.issue.owner (fun ~bot_info ->
-                Ci_minimization.run_coq_minimizer ~bot_info ~script
+                Minimization.run_coq_minimizer ~bot_info ~script
                   ~comment_thread_id:issue_info.id
                   ~comment_author:issue_info.user ~owner:issue_info.issue.owner
                   ~repo:issue_info.issue.repo ~options

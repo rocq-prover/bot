@@ -25,18 +25,18 @@ let job_action ~bot_info
       in
       match (github_repo_full_name, job_info.build_name) with
       | "rocq-prover/rocq", "bench" ->
-          Bench_utils.update_bench_status ~bot_info ~job_info
-            (gh_owner, gh_repo) ~external_id ~number:pr_num
+          Bench.update_bench_status ~bot_info ~job_info (gh_owner, gh_repo)
+            ~external_id ~number:pr_num
       | _, _ -> (
         match job_info.build_status with
         | "failed" ->
             let failure_reason = Option.value_exn job_info.failure_reason in
             let summary_builder, allow_failure_handler =
               if String.equal github_repo_full_name "rocq-prover/rocq" then
-                ( Ci_job_status_rocq.rocq_summary_builder
+                ( Job_status_rocq.rocq_summary_builder
                 , fun ~bot_info ~job_name ~job_url ~pr_num ~head_commit
                       (gh_owner, gh_repo) ~gitlab_repo_full_name ->
-                    Ci_job_status_rocq.handle_rocq_allow_failure ~bot_info
+                    Job_status_rocq.handle_rocq_allow_failure ~bot_info
                       ~job_name ~job_url ~pr_num ~head_commit
                       (gh_owner, gh_repo) ~gitlab_repo_full_name )
               else
@@ -46,18 +46,18 @@ let job_action ~bot_info
                       ~head_commit:_ _ ~gitlab_repo_full_name:_ ->
                     Lwt.return_unit )
             in
-            Ci_job_status.job_failure ~bot_info job_info ~pr_num
+            Job_status.job_failure ~bot_info job_info ~pr_num
               (gh_owner, gh_repo) ~github_repo_full_name ~gitlab_domain
               ~gitlab_repo_full_name ~context ~failure_reason ~external_id
               ~summary_builder ~allow_failure_handler ()
         | "success" as state ->
-            Ci_job_status.job_success_or_pending ~bot_info (gh_owner, gh_repo)
+            Job_status.job_success_or_pending ~bot_info (gh_owner, gh_repo)
               job_info ~github_repo_full_name ~gitlab_domain
               ~gitlab_repo_full_name ~context ~state ~external_id
-            <&> Ci_documentation.send_doc_url ~bot_info job_info
+            <&> Documentation.send_doc_url ~bot_info job_info
                   ~github_repo_full_name
         | ("created" | "running") as state ->
-            Ci_job_status.job_success_or_pending ~bot_info (gh_owner, gh_repo)
+            Job_status.job_success_or_pending ~bot_info (gh_owner, gh_repo)
               job_info ~github_repo_full_name ~gitlab_domain
               ~gitlab_repo_full_name ~context ~state ~external_id
         | "cancelled" | "canceled" | "pending" ->

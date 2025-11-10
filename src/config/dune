@@ -1,0 +1,6 @@
+(library
+ (name config)
+ (public_name coq-bot.config)
+ (libraries base bot-components stdio toml)
+ (wrapped false)
+ (modules config))

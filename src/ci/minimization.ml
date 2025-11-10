@@ -1,5 +1,4 @@
 open Bot_components
-open String_utils
 open Base
 open Utils
 open Lwt.Infix
@@ -83,12 +82,6 @@ let getopts options ~opt =
 
 let getopt options ~opt =
   options |> getopts ~opt |> List.hd |> Option.value ~default:""
-
-let parse_quantity table table_name =
-  let regexp = {|.*TOP \([0-9]*\)|} in
-  if string_match ~regexp table then
-    Str.matched_group 1 table |> Int.of_string |> Lwt.return_ok
-  else Lwt.return_error (f "parsing %s table." table_name)
 
 let accumulate_extra_minimizer_arguments options =
   let extra_args = getopts ~opt:"extra-arg" options in
@@ -276,8 +269,8 @@ let run_ci_minimization ~bot_info ~comment_thread_id ~owner ~repo ~pr_number
              ; failing_urls
              ; passing_urls
              ; docker_image } ->
-          Coq_utils.git_run_ci_minimization ~bot_info ~comment_thread_id ~owner
-            ~repo ~pr_number ~docker_image ~ci_targets ~target ~opam_switch
+          Coq.git_run_ci_minimization ~bot_info ~comment_thread_id ~owner ~repo
+            ~pr_number ~docker_image ~ci_targets ~target ~opam_switch
             ~failing_urls ~passing_urls ~base ~head ~minimizer_extra_arguments
             ~bug_file_name
           >>= fun result -> Lwt.return (target, result) )
@@ -1346,9 +1339,8 @@ let run_coq_minimizer ~bot_info ~script ~comment_thread_id ~comment_author
         ^ Stdlib.Filename.quote_command "./handle-web-file.sh" [description; url]
         ) )
   >>= fun script ->
-  Coq_utils.git_coq_bug_minimizer ~bot_info ~script ~comment_thread_id
-    ~comment_author ~owner ~repo ~coq_version ~ocaml_version
-    ~minimizer_extra_arguments
+  Coq.git_coq_bug_minimizer ~bot_info ~script ~comment_thread_id ~comment_author
+    ~owner ~repo ~coq_version ~ocaml_version ~minimizer_extra_arguments
   >>= function
   | Ok () ->
       (* TODO: change minimizer_url to a link to the particular action run when we can get that information *)
