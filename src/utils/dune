@@ -3,4 +3,4 @@
  (public_name coq-bot.utils)
  (libraries base bot-components)
  (wrapped false)
- (modules bench coq helpers))
+ (modules bench coq))

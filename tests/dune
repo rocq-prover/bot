@@ -4,8 +4,8 @@
 
 (test
  (name test_bot_info)
- (libraries alcotest bot-components botlib base))
+ (libraries alcotest bot-components base))
 
 (test
  (name test_webhook)
- (libraries alcotest bot-components botlib base cohttp))
+ (libraries alcotest bot-components base cohttp))
