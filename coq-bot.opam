@@ -22,6 +22,8 @@ depends: [
   "bot-components" {dev}
   "toml" {>= "7.0.0"}
   "ppx_expect" {>= "v0.15.1"}
+  "alcotest" {>= "1.7.0" & with-test}
+  "qcheck-alcotest" {>= "0.20" & with-test}
   "odoc" {>= "1.5.2" & with-doc}
 ]
 build: [

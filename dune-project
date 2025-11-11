@@ -50,6 +50,10 @@
    (and
     (>= 1.7.0)
     :with-test))
+  (qcheck-alcotest
+   (and
+    (>= 0.20)
+    :with-test))
   (odoc
    (and
     (>= 1.5.2)
