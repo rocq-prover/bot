@@ -1,12 +1,7 @@
 (library
  (name webhooks)
  (public_name coq-bot.webhooks)
- (libraries
-  base
-  bot-components
-  cohttp-lwt-unix
-  coq-bot.actions
-  coq-bot.ci
-  coq-bot.utils)
+ (libraries base bot-components cohttp-lwt-unix coq-bot.actions coq-bot.ci
+   coq-bot.utils)
  (wrapped false)
  (modules github gitlab minimizer scheduled))
