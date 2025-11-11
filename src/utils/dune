@@ -1,6 +1,6 @@
 (library
  (name utils)
  (public_name coq-bot.utils)
- (libraries base bot-components)
+ (libraries base bot-components coq-bot.config)
  (wrapped false)
  (modules bench coq helpers))
