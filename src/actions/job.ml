@@ -25,8 +25,8 @@ let job_action ~bot_info ~repo_config_table
       in
       match (github_repo_full_name, job_info.build_name) with
       | "rocq-prover/rocq", "bench" ->
-          Bench.update_bench_status ~bot_info ~job_info (gh_owner, gh_repo)
-            ~external_id ~number:pr_num
+          Bench.update_bench_status ~bot_info ~repo_config_table ~job_info
+            (gh_owner, gh_repo) ~external_id ~number:pr_num
       | _, _ -> (
         match job_info.build_status with
         | "failed" ->

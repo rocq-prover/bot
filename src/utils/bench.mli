@@ -31,6 +31,7 @@ val bench_comment :
 
 val update_bench_status :
      bot_info:Bot_components.Bot_info.t
+  -> repo_config_table:(string, Repo_config.t) Base.Hashtbl.t
   -> job_info:
        Bot_components.GitLab_types.ci_common_info
        Bot_components.GitLab_types.job_info
@@ -41,9 +42,7 @@ val update_bench_status :
 
 val run_bench :
      bot_info:Bot_components.Bot_info.t
-  -> ?org:string
-  -> ?team:string
-  -> ?gitlab_domain:string
+  -> repo_config_table:(string, Repo_config.t) Base.Hashtbl.t
   -> ?key_value_pairs:(string * string) list
   -> Bot_components.GitHub_types.comment_info
   -> unit Lwt.t

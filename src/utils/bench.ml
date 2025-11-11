@@ -6,6 +6,7 @@ open Utils
 open HTTP_utils
 open String_utils
 open Lwt.Infix
+open Repo_config
 
 let parse_quantity table table_name =
   let regexp = {|.*TOP \([0-9]*\)|} in
@@ -151,8 +152,8 @@ let bench_comment ~bot_info ~owner ~repo ~number ~gitlab_url ?check_url
       Lwt_io.printlf "Unable to get_pull_request_id for bench for pr #%d: %s"
         number e
 
-let update_bench_status ~bot_info ~job_info (gh_owner, gh_repo) ~external_id
-    ~number =
+let update_bench_status ~bot_info ~repo_config_table ~job_info
+    (gh_owner, gh_repo) ~external_id ~number =
   let open Lwt.Syntax in
   match number with
   | None ->
@@ -163,11 +164,28 @@ let update_bench_status ~bot_info ~job_info (gh_owner, gh_repo) ~external_id
       | Error e ->
           Lwt_io.printlf "No repo id for bench job: %s" e
       | Ok repo_id -> (
+          let repo_config =
+            get_repo_config_opt ~owner:gh_owner ~repo:gh_repo repo_config_table
+          in
+          (* Original: hardcoded GitLab URL "https://gitlab.inria.fr/coq/coq/-/jobs/%d"
+             Now: use repo_config if available, fallback to hardcoded value *)
+          let gitlab_url =
+            match repo_config with
+            | Some config -> (
+              match
+                (config.gitlab_domain, config.gitlab_owner, config.gitlab_repo)
+              with
+              | Some domain, Some gl_owner, Some gl_repo ->
+                  f "https://%s/%s/%s/-/jobs/%d" domain gl_owner gl_repo
+                    job_info.build_id
+              | _ ->
+                  f "https://gitlab.inria.fr/coq/coq/-/jobs/%d"
+                    job_info.build_id )
+            | None ->
+                f "https://gitlab.inria.fr/coq/coq/-/jobs/%d" job_info.build_id
+          in
           Lwt_io.printl "Pushing status check for bench job."
           <&>
-          let gitlab_url =
-            f "https://gitlab.inria.fr/coq/coq/-/jobs/%d" job_info.build_id
-          in
           let summary =
             f "## GitLab Job URL:\n[GitLab Bench Job](%s)\n" gitlab_url
           in
@@ -231,14 +249,41 @@ let update_bench_status ~bot_info ~job_info (gh_owner, gh_repo) ~external_id
           | _ ->
               Lwt_io.printlf "Unknown state for bench job: %s" state ) )
 
-let run_bench ~bot_info ?(org = "rocq-prover") ?(team = "contributors")
-    ?(gitlab_domain = "gitlab.inria.fr") ?key_value_pairs comment_info =
+let run_bench ~bot_info ~repo_config_table ?key_value_pairs comment_info =
   (* Do we want to use this more often? *)
   let open Lwt.Syntax in
   let pr = comment_info.issue in
   let owner = pr.issue.owner in
   let repo = pr.issue.repo in
   let pr_number = pr.number in
+  let repo_config = get_repo_config_opt ~owner ~repo repo_config_table in
+  (* Original: hardcoded org="rocq-prover", team="contributors", gitlab_domain="gitlab.inria.fr"
+     Now: use repo_config if available, fallback to hardcoded values *)
+  let org =
+    match repo_config with
+    | Some config -> (
+      match config.org_name with Some org -> org | None -> "rocq-prover" )
+    | None ->
+        "rocq-prover"
+  in
+  let team =
+    match repo_config with
+    | Some config -> (
+      match config.team_name with Some team -> team | None -> "contributors" )
+    | None ->
+        "contributors"
+  in
+  let gitlab_domain =
+    match repo_config with
+    | Some config -> (
+      match config.gitlab_domain with
+      | Some domain ->
+          domain
+      | None ->
+          "gitlab.inria.fr" )
+    | None ->
+        "gitlab.inria.fr"
+  in
   (* We need the GitLab build_id and project_id. Currently there is no good way
      to query this data so we have to jump through some somewhat useless hoops in
      order to get our hands on this information. TODO: do this more directly.*)
@@ -263,10 +308,24 @@ let run_bench ~bot_info ?(org = "rocq-prover") ?(team = "contributors")
         Lwt.return_error err
     | Ok summary -> (
       try
+        (* Original: hardcoded GitLab URL "https://gitlab.inria.fr/coq/coq/-/jobs/"
+           Now: use repo_config if available, fallback to hardcoded value *)
+        let gitlab_url_prefix =
+          match repo_config with
+          | Some config -> (
+            match
+              (config.gitlab_domain, config.gitlab_owner, config.gitlab_repo)
+            with
+            | Some domain, Some gl_owner, Some gl_repo ->
+                f "https://%s/%s/%s/-/jobs/" domain gl_owner gl_repo
+            | _ ->
+                "https://gitlab.inria.fr/coq/coq/-/jobs/" )
+          | None ->
+              "https://gitlab.inria.fr/coq/coq/-/jobs/"
+        in
         let build_id =
           let regexp =
-            f {|.*%s\([0-9]*\)|}
-              (Str.quote "[bench](https://gitlab.inria.fr/coq/coq/-/jobs/")
+            f {|.*%s\([0-9]*\)|} (Str.quote (f "[bench](%s" gitlab_url_prefix))
           in
           ( if String_utils.string_match ~regexp summary then
               Str.matched_group 1 summary
