@@ -1,0 +1,68 @@
+# Test configuration file for integration tests
+
+[bot]
+name = "testbot"
+email = "testbot@users.noreply.github.com"
+
+[server]
+domain = "testbot.herokuapp.com"
+port = "8000"
+
+[github]
+api_token = "test_token"
+webhook_secret = "test_secret"
+app_id = "12345"
+
+[repositories.rocq]
+github = "rocq-prover/rocq"
+github_installation_id = "1062161"
+github_project_number = "11"
+gitlab_domain = "gitlab.inria.fr"
+gitlab_owner = "coq"
+gitlab_repo = "coq"
+org_name = "rocq-prover"
+team_name = "contributors"
+minimizer_url = "https://github.com/rocq-community/run-coq-bug-minimizer/actions"
+
+[repositories.rocq.ci]
+full_ci_variable = "FULL_CI"
+skip_docker_variable = "SKIP_DOCKER"
+docker_path_pattern = "dev/ci/docker/.*Dockerfile.*"
+
+[repositories.rocq.labels]
+needs_rebase = "needs: rebase"
+stale = "stale"
+needs_full_ci = "needs: full CI"
+request_full_ci = "request: full CI"
+needs_independent_fix = "needs: independent fix"
+
+[repositories.rocq.jobs]
+bench = "bench"
+doc_refman = "doc:refman|doc:ci-refman"
+doc_init = "doc:init"
+doc_stdlib = "doc:stdlib|doc:stdlib:dune"
+doc_ml_api = "doc:ml-api:odoc"
+
+[repositories.rocq.documentation]
+refman_path = "_build/default/doc/refman-html/index.html"
+corelib_path = "_build/default/doc/corelib/html/index.html"
+stdlib_path = "_build/default/doc/stdlib/html/index.html"
+ml_api_path = "_build/default/_doc/_html/index.html"
+
+[repositories.coq]
+github = "coq/coq"
+github_installation_id = "999999"
+gitlab_domain = "gitlab.com"
+gitlab_owner = "coq"
+gitlab_repo = "coq"
+org_name = "coq"
+team_name = "maintainers"
+
+[repositories.coq.jobs]
+bench = "benchmark"
+doc_refman = "doc:refman"
+
+[repositories.opam]
+github = "ocaml/opam"
+org_name = "ocaml"
+
