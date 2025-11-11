@@ -1,5 +1,6 @@
 val run_ci_action :
      bot_info:Bot_components.Bot_info.t
+  -> repo_config_table:(string, Repo_config.t) Base.Hashtbl.t
   -> comment_info:Bot_components.GitHub_types.comment_info
   -> ?full_ci:bool
   -> gitlab_mapping:(string, string) Base.Hashtbl.t
@@ -9,6 +10,7 @@ val run_ci_action :
 
 val pull_request_updated_action :
      bot_info:Bot_components.Bot_info.t
+  -> repo_config_table:(string, Repo_config.t) Base.Hashtbl.t
   -> action:Bot_components.GitHub_types.pull_request_action
   -> pr_info:
        Bot_components.GitHub_types.issue_info
@@ -19,6 +21,7 @@ val pull_request_updated_action :
 
 val rocq_check_needs_rebase_pr :
      bot_info:Bot_components.Bot_info.t
+  -> repo_config_table:(string, Repo_config.t) Base.Hashtbl.t
   -> owner:string
   -> repo:string
   -> warn_after:int
@@ -28,6 +31,7 @@ val rocq_check_needs_rebase_pr :
 
 val rocq_check_stale_pr :
      bot_info:Bot_components.Bot_info.t
+  -> repo_config_table:(string, Repo_config.t) Base.Hashtbl.t
   -> owner:string
   -> repo:string
   -> after:int

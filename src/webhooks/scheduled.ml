@@ -5,7 +5,8 @@ open Bot_components
 open Utils
 open Lwt.Infix
 
-let handle_stale_pr_check ~bot_info ~key ~app_id ~daily_schedule_secret ~body =
+let handle_stale_pr_check ~bot_info ~key ~app_id ~repo_config_table
+    ~daily_schedule_secret ~body =
   body
   >>= fun body ->
   match String.split ~on:':' body with
@@ -15,14 +16,14 @@ let handle_stale_pr_check ~bot_info ~key ~app_id ~daily_schedule_secret ~body =
         let close_after = 30 in
         (fun () ->
           Bot_components.Github_installations.action_as_github_app ~bot_info
-            ~key ~app_id ~owner
-            (Pr_sync.rocq_check_needs_rebase_pr ~owner ~repo ~warn_after
-               ~close_after ~throttle:6 )
+            ~key ~app_id ~owner (fun ~bot_info ->
+              Pr_sync.rocq_check_needs_rebase_pr ~bot_info ~repo_config_table
+                ~owner ~repo ~warn_after ~close_after ~throttle:6 )
           >>= fun () ->
           Bot_components.Github_installations.action_as_github_app ~bot_info
-            ~key ~app_id ~owner
-            (Pr_sync.rocq_check_stale_pr ~owner ~repo ~after:close_after
-               ~throttle:4 ) )
+            ~key ~app_id ~owner (fun ~bot_info ->
+              Pr_sync.rocq_check_stale_pr ~bot_info ~repo_config_table ~owner
+                ~repo ~after:close_after ~throttle:4 ) )
         |> Lwt.async ;
         Server.respond_string ~status:`OK ~body:"Stale pull requests updated" ()
         )

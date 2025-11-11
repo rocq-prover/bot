@@ -7,9 +7,10 @@ open Cohttp_lwt_unix
 open Git_utils
 open Utils
 open Lwt.Infix
+open Repo_config
 
 (* TODO: ensure there's no race condition for 2 push with very close timestamps *)
-let update_pr ?full_ci ?(skip_author_check = false) ~bot_info
+let update_pr ?full_ci ?(skip_author_check = false) ~bot_info ~repo_config_table
     (pr_info : issue_info pull_request_info) ~gitlab_mapping ~github_mapping =
   let open Lwt_result.Infix in
   (* Try as much as possible to get unique refnames for local branches. *)
@@ -27,21 +28,58 @@ let update_pr ?full_ci ?(skip_author_check = false) ~bot_info
           ~pr_number:pr_info.issue.number ~base:local_base_branch
           local_head_branch )
   >>= fun ok ->
-  let needs_full_ci_label = "needs: full CI" in
-  let rebase_label = "needs: rebase" in
-  let stale_label = "stale" in
+  let owner = pr_info.issue.issue.owner in
+  let repo = pr_info.issue.issue.repo in
+  let repo_config = get_repo_config_opt ~owner ~repo repo_config_table in
+  (* Original: hardcoded labels "needs: full CI", "needs: rebase", "stale"
+     Now: use repo_config.labels if available, fallback to hardcoded values *)
+  let needs_full_ci_label =
+    match repo_config with
+    | Some config -> (
+      match config.labels with
+      | Some labels ->
+          Option.value ~default:"needs: full CI" labels.needs_full_ci
+      | None ->
+          "needs: full CI" )
+    | None ->
+        "needs: full CI"
+  in
+  let rebase_label =
+    match repo_config with
+    | Some config -> (
+      match config.labels with
+      | Some labels ->
+          Option.value ~default:"needs: rebase" labels.needs_rebase
+      | None ->
+          "needs: rebase" )
+    | None ->
+        "needs: rebase"
+  in
+  let stale_label =
+    match repo_config with
+    | Some config -> (
+      match config.labels with
+      | Some labels ->
+          Option.value ~default:"stale" labels.stale
+      | None ->
+          "stale" )
+    | None ->
+        "stale"
+  in
   let open Lwt_result.Syntax in
   if ok then (
     (* Remove rebase / stale label *)
     GitHub_automation.remove_labels_if_present ~bot_info pr_info.issue
       [rebase_label; stale_label] ;
+    (* Original: hardcoded check for "rocq-prover"/"rocq" repo
+       Now: check if repo has config (or fallback to hardcoded check) *)
     (* In the Rocq Prover repo, we want to prevent untrusted contributors from
        circumventing the fact that the bench job is a manual job by changing
        the CI configuration. *)
     let* can_trigger_ci =
       if
-        String.equal pr_info.issue.issue.owner "rocq-prover"
-        && String.equal pr_info.issue.issue.repo "rocq"
+        ( has_repo_config ~owner ~repo repo_config_table
+        || (String.equal owner "rocq-prover" && String.equal repo "rocq") )
         && not skip_author_check
       then
         let* config_modified =
@@ -49,15 +87,29 @@ let update_pr ?full_ci ?(skip_author_check = false) ~bot_info
             ".*gitlab.*\\.yml"
         in
         if config_modified then (
+          (* Original: hardcoded org="rocq-prover" and team="contributors"
+             Now: use repo_config.org_name and repo_config.team_name if available,
+             fallback to hardcoded values *)
+          let org, team =
+            match repo_config with
+            | Some config -> (
+              match (config.org_name, config.team_name) with
+              | Some org, Some team ->
+                  (org, team)
+              | _ ->
+                  ("rocq-prover", "contributors") )
+            | None ->
+                ("rocq-prover", "contributors")
+          in
           Lwt.async (fun () ->
               Lwt_io.printlf
-                "CI configuration modified in PR rocq-prover/rocq#%d, checking \
-                 if %s is a member of @rocq-prover/contributors..."
-                pr_info.issue.number pr_info.issue.user ) ;
+                "CI configuration modified in PR %s/%s#%d, checking if %s is a \
+                 member of @%s/%s..."
+                owner repo pr_info.issue.number pr_info.issue.user org team ) ;
           (* This is an approximation:
              we are checking who the PR author is and not who is pushing. *)
-          GitHub_queries.get_team_membership ~bot_info ~org:"rocq-prover"
-            ~team:"contributors" ~user:pr_info.issue.user )
+          GitHub_queries.get_team_membership ~bot_info ~org ~team
+            ~user:pr_info.issue.user )
         else Lwt.return_ok true
       else Lwt.return_ok true
     in
@@ -74,21 +126,74 @@ let update_pr ?full_ci ?(skip_author_check = false) ~bot_info
       >>= Utils.report_on_posting_comment
       >>= fun () -> Lwt.return_ok () )
     else
+      (* Original: hardcoded check for "rocq-prover"/"rocq" repo
+         Now: check if repo has config (or fallback to hardcoded check) *)
       (* In Rocq Prover repo, we have several special cases:
          1. if something has changed in dev/ci/docker/, we rebuild the Docker image
          2. if there was a special label set, we run a full CI
       *)
       let get_options =
         if
-          String.equal pr_info.issue.issue.owner "rocq-prover"
-          && String.equal pr_info.issue.issue.repo "rocq"
+          has_repo_config ~owner ~repo repo_config_table
+          || (String.equal owner "rocq-prover" && String.equal repo "rocq")
         then
+          (* Original: hardcoded docker path pattern "dev/ci/docker/.*Dockerfile.*"
+             and CI variables "SKIP_DOCKER", "FULL_CI"
+             Now: use repo_config.ci_config if available, fallback to hardcoded values *)
+          let docker_path_pattern =
+            match repo_config with
+            | Some config -> (
+              match config.ci_config with
+              | Some ci_config ->
+                  Option.value ~default:"dev/ci/docker/.*Dockerfile.*"
+                    ci_config.docker_path_pattern
+              | None ->
+                  "dev/ci/docker/.*Dockerfile.*" )
+            | None ->
+                "dev/ci/docker/.*Dockerfile.*"
+          in
+          let skip_docker_variable =
+            match repo_config with
+            | Some config -> (
+              match config.ci_config with
+              | Some ci_config ->
+                  Option.value ~default:"SKIP_DOCKER"
+                    ci_config.skip_docker_variable
+              | None ->
+                  "SKIP_DOCKER" )
+            | None ->
+                "SKIP_DOCKER"
+          in
+          let full_ci_variable =
+            match repo_config with
+            | Some config -> (
+              match config.ci_config with
+              | Some ci_config ->
+                  Option.value ~default:"FULL_CI" ci_config.full_ci_variable
+              | None ->
+                  "FULL_CI" )
+            | None ->
+                "FULL_CI"
+          in
+          let request_full_ci_label =
+            match repo_config with
+            | Some config -> (
+              match config.labels with
+              | Some labels ->
+                  Option.value ~default:"request: full CI"
+                    labels.request_full_ci
+              | None ->
+                  "request: full CI" )
+            | None ->
+                "request: full CI"
+          in
           Lwt.all
             [ ( git_test_modified ~base:pr_info.base.sha ~head:pr_info.head.sha
-                  "dev/ci/docker/.*Dockerfile.*"
+                  docker_path_pattern
               >>= function
               | Ok true ->
-                  Lwt.return {|-o ci.variable="SKIP_DOCKER=false"|}
+                  Lwt.return
+                    (f {|-o ci.variable="%s=false"|} skip_docker_variable)
               | Ok false ->
                   Lwt.return ""
               | Error e ->
@@ -98,37 +203,40 @@ let update_pr ?full_ci ?(skip_author_check = false) ~bot_info
                      %s\n"
                     e
                   >>= fun () -> Lwt.return "" )
-            ; (let request_full_ci_label = "request: full CI" in
-               match full_ci with
-               | Some false ->
-                   (* Light CI requested *)
-                   GitHub_automation.add_labels_if_absent ~bot_info
-                     pr_info.issue [needs_full_ci_label] ;
-                   Lwt.return {| -o ci.variable="FULL_CI=false" |}
-               | Some true ->
-                   (* Full CI requested *)
-                   GitHub_automation.remove_labels_if_present ~bot_info
-                     pr_info.issue
-                     [needs_full_ci_label; request_full_ci_label] ;
-                   Lwt.return {| -o ci.variable="FULL_CI=true" |}
-               | None ->
-                   (* Nothing requested with the command,
-                      check if the request label is present *)
-                   if
-                     pr_info.issue.labels
-                     |> List.exists ~f:(fun l ->
-                            String.equal l request_full_ci_label )
-                   then (
-                     (* Full CI requested *)
-                     GitHub_automation.remove_labels_if_present ~bot_info
-                       pr_info.issue
-                       [needs_full_ci_label; request_full_ci_label] ;
-                     Lwt.return {| -o ci.variable="FULL_CI=true" |} )
-                   else (
-                     (* Nothing requested *)
-                     GitHub_automation.add_labels_if_absent ~bot_info
-                       pr_info.issue [needs_full_ci_label] ;
-                     Lwt.return {| -o ci.variable="FULL_CI=false" |} ) ) ]
+            ; ( match full_ci with
+              | Some false ->
+                  (* Light CI requested *)
+                  GitHub_automation.add_labels_if_absent ~bot_info pr_info.issue
+                    [needs_full_ci_label] ;
+                  Lwt.return
+                    (f {| -o ci.variable="%s=false" |} full_ci_variable)
+              | Some true ->
+                  (* Full CI requested *)
+                  GitHub_automation.remove_labels_if_present ~bot_info
+                    pr_info.issue
+                    [needs_full_ci_label; request_full_ci_label] ;
+                  Lwt.return (f {| -o ci.variable="%s=true" |} full_ci_variable)
+              | None ->
+                  (* Nothing requested with the command,
+                     check if the request label is present *)
+                  if
+                    pr_info.issue.labels
+                    |> List.exists ~f:(fun l ->
+                           String.equal l request_full_ci_label )
+                  then (
+                    (* Full CI requested *)
+                    GitHub_automation.remove_labels_if_present ~bot_info
+                      pr_info.issue
+                      [needs_full_ci_label; request_full_ci_label] ;
+                    Lwt.return
+                      (f {| -o ci.variable="%s=true" |} full_ci_variable) )
+                  else (
+                    (* Nothing requested *)
+                    GitHub_automation.add_labels_if_absent ~bot_info
+                      pr_info.issue [needs_full_ci_label] ;
+                    Lwt.return
+                      (f {| -o ci.variable="%s=false" |} full_ci_variable) ) )
+            ]
           >|= fun options -> String.concat ~sep:" " options
         else Lwt.return ""
       in
@@ -178,12 +286,28 @@ let update_pr ?full_ci ?(skip_author_check = false) ~bot_info
         | Error e ->
             Lwt.return (Error e) ) )
 
-let run_ci_action ~bot_info ~comment_info ?full_ci ~gitlab_mapping
-    ~github_mapping () =
-  let team = "contributors" in
+let run_ci_action ~bot_info ~repo_config_table ~comment_info ?full_ci
+    ~gitlab_mapping ~github_mapping () =
+  let owner = comment_info.issue.issue.owner in
+  let repo = comment_info.issue.issue.repo in
+  let repo_config = get_repo_config_opt ~owner ~repo repo_config_table in
+  (* Original: hardcoded org="rocq-prover" and team="contributors"
+     Now: use repo_config.org_name and repo_config.team_name if available,
+     fallback to hardcoded values *)
+  let org, team =
+    match repo_config with
+    | Some config -> (
+      match (config.org_name, config.team_name) with
+      | Some org, Some team ->
+          (org, team)
+      | _ ->
+          ("rocq-prover", "contributors") )
+    | None ->
+        ("rocq-prover", "contributors")
+  in
   (fun () ->
     (let open Lwt_result.Infix in
-     GitHub_queries.get_team_membership ~bot_info ~org:"rocq-prover" ~team
+     GitHub_queries.get_team_membership ~bot_info ~org ~team
        ~user:comment_info.author
      >>= (fun is_member ->
            if is_member then
@@ -192,7 +316,7 @@ let run_ci_action ~bot_info ~comment_info ?full_ci ~gitlab_mapping
              match comment_info.pull_request with
              | Some pr_info ->
                  update_pr ~skip_author_check:true pr_info ~bot_info
-                   ~gitlab_mapping ~github_mapping
+                   ~repo_config_table ~gitlab_mapping ~github_mapping
              | None ->
                  let {owner; repo; number} = comment_info.issue.issue in
                  GitHub_queries.get_pull_request_refs ~bot_info ~owner ~repo
@@ -200,7 +324,7 @@ let run_ci_action ~bot_info ~comment_info ?full_ci ~gitlab_mapping
                  >>= fun pr_info ->
                  update_pr ?full_ci ~skip_author_check:true
                    {pr_info with issue= comment_info.issue}
-                   ~bot_info ~gitlab_mapping ~github_mapping
+                   ~bot_info ~repo_config_table ~gitlab_mapping ~github_mapping
            else
              (* We inform the author of the request that they are not authorized. *)
              GitHub_automation.inform_user_not_in_contributors ~bot_info
@@ -218,13 +342,22 @@ let run_ci_action ~bot_info ~comment_info ?full_ci ~gitlab_mapping
          comment_info.author comment_info.issue.issue.owner team )
     ()
 
-let pull_request_updated_action ~bot_info
+let pull_request_updated_action ~bot_info ~repo_config_table
     ~(action : GitHub_types.pull_request_action)
     ~(pr_info : GitHub_types.issue_info GitHub_types.pull_request_info)
     ~gitlab_mapping ~github_mapping =
+  let owner = pr_info.issue.issue.owner in
+  let repo = pr_info.issue.issue.repo in
+  let repo_url = f "https://github.com/%s/%s" owner repo in
+  (* Original: hardcoded check for "https://github.com/rocq-prover/rocq"
+     Now: check if repo has config (or fallback to hardcoded check) *)
   ( match (action, pr_info.base.branch.repo_url) with
-  | PullRequestOpened, "https://github.com/rocq-prover/rocq"
-    when String.equal pr_info.base.branch.name pr_info.head.branch.name ->
+  | PullRequestOpened, url
+    when String.equal url repo_url
+         && String.equal pr_info.base.branch.name pr_info.head.branch.name
+         && ( has_repo_config ~owner ~repo repo_config_table
+            || (String.equal owner "rocq-prover" && String.equal repo "rocq") )
+    ->
       (fun () ->
         GitHub_mutations.post_comment ~bot_info ~id:pr_info.issue.id
           ~message:
@@ -240,7 +373,8 @@ let pull_request_updated_action ~bot_info
   | _ ->
       () ) ;
   (fun () ->
-    update_pr pr_info ~bot_info ~gitlab_mapping ~github_mapping
+    update_pr pr_info ~bot_info ~repo_config_table ~gitlab_mapping
+      ~github_mapping
     >>= fun _ -> Lwt.return_unit )
   |> Lwt.async ;
   Server.respond_string ~status:`OK
@@ -285,10 +419,45 @@ let apply_after_label ~bot_info ~owner ~repo ~after ~label ~action ~throttle ()
   | Error err ->
       Lwt_io.print (f "Error: %s\n" err)
 
-let rocq_check_needs_rebase_pr ~bot_info ~owner ~repo ~warn_after ~close_after
-    ~throttle =
-  let rebase_label = "needs: rebase" in
-  let stale_label = "stale" in
+let rocq_check_needs_rebase_pr ~bot_info ~repo_config_table ~owner ~repo
+    ~warn_after ~close_after ~throttle =
+  let repo_config = get_repo_config_opt ~owner ~repo repo_config_table in
+  (* Original: hardcoded labels "needs: rebase", "stale", "needs: independent fix"
+     Now: use repo_config.labels if available, fallback to hardcoded values *)
+  let rebase_label =
+    match repo_config with
+    | Some config -> (
+      match config.labels with
+      | Some labels ->
+          Option.value ~default:"needs: rebase" labels.needs_rebase
+      | None ->
+          "needs: rebase" )
+    | None ->
+        "needs: rebase"
+  in
+  let stale_label =
+    match repo_config with
+    | Some config -> (
+      match config.labels with
+      | Some labels ->
+          Option.value ~default:"stale" labels.stale
+      | None ->
+          "stale" )
+    | None ->
+        "stale"
+  in
+  let needs_independent_fix_label =
+    match repo_config with
+    | Some config -> (
+      match config.labels with
+      | Some labels ->
+          Option.value ~default:"needs: independent fix"
+            labels.needs_independent_fix
+      | None ->
+          "needs: independent fix" )
+    | None ->
+        "needs: independent fix"
+  in
   GitHub_queries.get_label ~bot_info ~owner ~repo ~label:stale_label
   >>= function
   | Ok None ->
@@ -299,7 +468,9 @@ let rocq_check_needs_rebase_pr ~bot_info ~owner ~repo ~warn_after ~close_after
         >>= function
         | Ok labels ->
             let has_label l = List.mem labels ~equal:String.equal l in
-            if not (has_label stale_label || has_label "needs: independent fix")
+            if
+              not
+                (has_label stale_label || has_label needs_independent_fix_label)
             then
               GitHub_mutations.post_comment ~id:pr_id
                 ~message:
@@ -323,8 +494,22 @@ let rocq_check_needs_rebase_pr ~bot_info ~owner ~repo ~warn_after ~close_after
   | Error err ->
       Lwt_io.print (f "Error: %s\n" err)
 
-let rocq_check_stale_pr ~bot_info ~owner ~repo ~after ~throttle =
-  let label = "stale" in
+let rocq_check_stale_pr ~bot_info ~repo_config_table ~owner ~repo ~after
+    ~throttle =
+  let repo_config = get_repo_config_opt ~owner ~repo repo_config_table in
+  (* Original: hardcoded label "stale"
+     Now: use repo_config.labels if available, fallback to hardcoded value *)
+  let label =
+    match repo_config with
+    | Some config -> (
+      match config.labels with
+      | Some labels ->
+          Option.value ~default:"stale" labels.stale
+      | None ->
+          "stale" )
+    | None ->
+        "stale"
+  in
   let action pr_id _pr_number =
     GitHub_mutations.post_comment ~id:pr_id
       ~message:
