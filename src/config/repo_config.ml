@@ -170,52 +170,48 @@ let parse_doc_config toml_data =
       failwith (f "Failed to parse documentation configuration: %s" msg)
 
 (** Parse_a single repository configuration from TOML *)
-let parse_repo_config repo_key toml_data =
+let parse_repo_config repo_key (repo_data : Toml.Types.table) =
   try
-    match Utils.find repo_key toml_data with
-    | Toml.Types.TTable repo_data ->
-        let github_full =
-          get_string_value repo_data "github"
-          |> Option.value
-               ~default:(f "Missing 'github' key for repository %s" repo_key)
-        in
-        let github_owner, github_repo =
-          match Base.String.split ~on:'/' github_full with
-          | [owner; repo] ->
-              (owner, repo)
-          | _ ->
-              (* TODO: handle error more gracefully *)
-              failwith
-                (f
-                   "Invalid 'github' value in repository.%s: expected \
-                    'owner/repo' format"
-                   repo_key )
-        in
-        let github_installation_id =
-          get_string_value repo_data "github_installation_id"
-          |> Option.map ~f:Int.of_string
-        in
-        let github_project_number =
-          get_string_value repo_data "github_project_number"
-          |> Option.map ~f:Int.of_string
-        in
-        Some
-          { github_owner
-          ; github_repo
-          ; gitlab_domain= get_string_value repo_data "gitlab_domain"
-          ; gitlab_owner= get_string_value repo_data "gitlab_owner"
-          ; gitlab_repo= get_string_value repo_data "gitlab_repo"
-          ; github_installation_id
-          ; github_project_number
-          ; org_name= get_string_value repo_data "org_name"
-          ; team_name= get_string_value repo_data "team_name"
-          ; minimizer_url= get_string_value repo_data "minimizer_url"
-          ; ci_config= parse_ci_config repo_data
-          ; labels= parse_label_config repo_data
-          ; jobs= parse_job_config repo_data
-          ; documentation= parse_doc_config repo_data }
-    | _ ->
-        None
+    let github_full =
+      get_string_value repo_data "github"
+      |> Option.value
+           ~default:(f "Missing 'github' key for repository %s" repo_key)
+    in
+    let github_owner, github_repo =
+      match Base.String.split ~on:'/' github_full with
+      | [owner; repo] ->
+          (owner, repo)
+      | _ ->
+          (* TODO: handle error more gracefully *)
+          failwith
+            (f
+               "Invalid 'github' value in repository.%s: expected 'owner/repo' \
+                format"
+               repo_key )
+    in
+    let github_installation_id =
+      get_string_value repo_data "github_installation_id"
+      |> Option.map ~f:Int.of_string
+    in
+    let github_project_number =
+      get_string_value repo_data "github_project_number"
+      |> Option.map ~f:Int.of_string
+    in
+    Some
+      { github_owner
+      ; github_repo
+      ; gitlab_domain= get_string_value repo_data "gitlab_domain"
+      ; gitlab_owner= get_string_value repo_data "gitlab_owner"
+      ; gitlab_repo= get_string_value repo_data "gitlab_repo"
+      ; github_installation_id
+      ; github_project_number
+      ; org_name= get_string_value repo_data "org_name"
+      ; team_name= get_string_value repo_data "team_name"
+      ; minimizer_url= get_string_value repo_data "minimizer_url"
+      ; ci_config= parse_ci_config repo_data
+      ; labels= parse_label_config repo_data
+      ; jobs= parse_job_config repo_data
+      ; documentation= parse_doc_config repo_data }
   with
   | Stdlib.Not_found ->
       None
@@ -231,7 +227,11 @@ let parse_all_repo_configs toml_data =
     | Toml.Types.TTable repos_data ->
         Utils.list_table_keys repos_data
         |> List.filter_map ~f:(fun repo_key ->
-               parse_repo_config repo_key toml_data )
+               match Utils.find repo_key repos_data with
+               | Toml.Types.TTable repo_data ->
+                   parse_repo_config repo_key repo_data
+               | _ ->
+                   None )
     | _ ->
         []
   with
