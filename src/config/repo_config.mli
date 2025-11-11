@@ -45,8 +45,8 @@ val parse_all_repo_configs : Toml.Types.table -> t list
 
 val create_repo_config_table : Toml.Types.table -> (string, t) Base.Hashtbl.t
 
-val get_repo_config :
-  owner:string -> repo:string -> (string, t) Base.Hashtbl.t -> t
+val get_repo_config_opt :
+  owner:string -> repo:string -> (string, t) Base.Hashtbl.t -> t option
 
 val has_repo_config :
   owner:string -> repo:string -> (string, t) Base.Hashtbl.t -> bool

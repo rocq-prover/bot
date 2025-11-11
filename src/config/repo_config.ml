@@ -250,12 +250,12 @@ let create_repo_config_table toml_data =
       Hashtbl.set table ~key ~data:config ) ;
   table
 
-(** Get repository configurtation by owner and repo *)
-let get_repo_config ~owner ~repo repo_config_table =
+(** Get repository configuration by owner and repo, returns None if not found *)
+let get_repo_config_opt ~owner ~repo repo_config_table =
   let key = f "%s/%s" owner repo in
-  Hashtbl.find_exn repo_config_table key
+  Hashtbl.find repo_config_table key
 
-(** Check if a repository has configurtaion in the table *)
+(** Check if a repository has configuration in the table *)
 let has_repo_config ~owner ~repo repo_config_table =
   let key = f "%s/%s" owner repo in
   Hashtbl.mem repo_config_table key

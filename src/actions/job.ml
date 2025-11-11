@@ -6,7 +6,7 @@ open Git_utils
 open Utils
 open Lwt.Infix
 
-let job_action ~bot_info
+let job_action ~bot_info ~repo_config_table
     ({build_name; common_info= {http_repo_url}} as job_info) ~gitlab_mapping =
   let pr_num, branch_or_pr = pr_from_branch job_info.common_info.branch in
   let context = f "GitLab CI job %s (%s)" build_name branch_or_pr in
@@ -54,8 +54,13 @@ let job_action ~bot_info
             Job_status.job_success_or_pending ~bot_info (gh_owner, gh_repo)
               job_info ~github_repo_full_name ~gitlab_domain
               ~gitlab_repo_full_name ~context ~state ~external_id
-            <&> Documentation.send_doc_url ~bot_info job_info
-                  ~github_repo_full_name
+            <&>
+            let repo_config =
+              Repo_config.get_repo_config_opt ~owner:gh_owner ~repo:gh_repo
+                repo_config_table
+            in
+            Documentation.send_doc_url ~bot_info ~github_repo_full_name
+              ?repo_config job_info
         | ("created" | "running") as state ->
             Job_status.job_success_or_pending ~bot_info (gh_owner, gh_repo)
               job_info ~github_repo_full_name ~gitlab_domain
