@@ -68,6 +68,7 @@ val job_success_or_pending :
 
 val pipeline_action :
      bot_info:Bot_components.Bot_info.t
+  -> repo_config_table:(string, Repo_config.t) Base.Hashtbl.t
   -> Bot_components.GitLab_types.pipeline_info
   -> gitlab_mapping:(string, string) Base.Hashtbl.t
   -> ?full_ci_check_repo:(string * string) option

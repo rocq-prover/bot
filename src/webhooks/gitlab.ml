@@ -6,6 +6,7 @@ open Bot_components.GitHub_GitLab_sync
 open Job_status
 open Lwt.Infix
 open Utils
+open Repo_config
 
 let handle_gitlab_webhook ~bot_info ~key ~app_id ~gitlab_mapping
     ~repo_config_table ~gitlab_webhook_secret ~headers ~body =
@@ -37,10 +38,21 @@ let handle_gitlab_webhook ~bot_info ~key ~app_id ~gitlab_mapping
         (fun () ->
           Bot_components.Github_installations.action_as_github_app ~bot_info
             ~key ~app_id ~owner (fun ~bot_info ->
-              pipeline_action ~bot_info pipeline_info ~gitlab_mapping
-                ~full_ci_check_repo:(Some ("rocq-prover", "rocq"))
-                ~auto_minimize_on_failure:(Some ("rocq-prover", "rocq"))
-                () ) )
+              (* Original: hardcoded "rocq-prover", "rocq" for full_ci_check_repo and auto_minimize_on_failure
+                 Now: use repo_config if available, fallback to hardcoded values *)
+              let full_ci_repo =
+                Option.first_some
+                  (find_repo_with_ci_config repo_config_table)
+                  (Some ("rocq-prover", "rocq"))
+              in
+              let minimizer_repo =
+                Option.first_some
+                  (find_repo_with_minimizer repo_config_table)
+                  (Some ("rocq-prover", "rocq"))
+              in
+              pipeline_action ~bot_info ~repo_config_table pipeline_info
+                ~gitlab_mapping ~full_ci_check_repo:full_ci_repo
+                ~auto_minimize_on_failure:minimizer_repo () ) )
         |> Lwt.async ;
         Server.respond_string ~status:`OK ~body:"Pipeline event." () )
   | Ok (_, UnsupportedEvent e) ->

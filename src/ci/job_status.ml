@@ -8,6 +8,7 @@ open String_utils
 open Git_utils
 open Lwt.Infix
 open Lwt.Syntax
+open Repo_config
 
 (******************************************************************************)
 (* Types                                                                      *)
@@ -289,9 +290,9 @@ let job_success_or_pending ~bot_info (gh_owner, gh_repo) job_info
   | Error e ->
       Lwt_io.printf "%s\n" e
 
-let pipeline_action ~bot_info ({common_info= {http_repo_url}} as pipeline_info)
-    ~gitlab_mapping ?(full_ci_check_repo = None)
-    ?(auto_minimize_on_failure = None) () =
+let pipeline_action ~bot_info ~repo_config_table
+    ({common_info= {http_repo_url}} as pipeline_info) ~gitlab_mapping
+    ?(full_ci_check_repo = None) ?(auto_minimize_on_failure = None) () =
   let pr_number, _ = pr_from_branch pipeline_info.common_info.branch in
   match pipeline_info.state with
   | "skipped" ->
@@ -310,8 +311,29 @@ let pipeline_action ~bot_info ({common_info= {http_repo_url}} as pipeline_info)
       | Error err ->
           Lwt_io.printlf "Error in pipeline action: %s" err
       | Ok (gh_owner, gh_repo) -> (
+          let repo_config =
+            Repo_config.get_repo_config_opt ~owner:gh_owner ~repo:gh_repo
+              repo_config_table
+          in
           let state, status, conclusion, title, summary_top =
             (* Check if this repo should have full CI detection *)
+            (* Original: hardcoded CI variable name "FULL_CI"
+               Now: use repo_config.ci_config.full_ci_variable if available, fallback to "FULL_CI" *)
+            let full_ci_variable_name =
+              match repo_config with
+              | Some config -> (
+                match config.ci_config with
+                | Some ci_config -> (
+                  match ci_config.full_ci_variable with
+                  | Some var_name ->
+                      var_name
+                  | None ->
+                      "FULL_CI" )
+                | None ->
+                    "FULL_CI" )
+              | None ->
+                  "FULL_CI"
+            in
             let full_ci =
               match full_ci_check_repo with
               | Some (check_owner, check_repo)
@@ -320,7 +342,7 @@ let pipeline_action ~bot_info ({common_info= {http_repo_url}} as pipeline_info)
                 try
                   List.find_map
                     ~f:(fun (key, value) ->
-                      if String.equal key "FULL_CI" then
+                      if String.equal key full_ci_variable_name then
                         Some (Bool.of_string value)
                       else None )
                     pipeline_info.variables

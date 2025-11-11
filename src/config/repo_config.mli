@@ -50,3 +50,13 @@ val get_repo_config_opt :
 
 val has_repo_config :
   owner:string -> repo:string -> (string, t) Base.Hashtbl.t -> bool
+
+val has_ci_config : t -> bool
+
+val has_minimizer : t -> bool
+
+val find_repo_with_ci_config :
+  (string, t) Base.Hashtbl.t -> (string * string) option
+
+val find_repo_with_minimizer :
+  (string, t) Base.Hashtbl.t -> (string * string) option

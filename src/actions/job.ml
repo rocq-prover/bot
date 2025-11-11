@@ -5,6 +5,7 @@ open Bot_components.GitHub_GitLab_sync
 open Git_utils
 open Utils
 open Lwt.Infix
+open Repo_config
 
 let job_action ~bot_info ~repo_config_table
     ({build_name; common_info= {http_repo_url}} as job_info) ~gitlab_mapping =
@@ -23,16 +24,49 @@ let job_action ~bot_info ~repo_config_table
         f "%s,projects/%d/jobs/%d" http_repo_url job_info.common_info.project_id
           job_info.build_id
       in
-      match (github_repo_full_name, job_info.build_name) with
-      | "rocq-prover/rocq", "bench" ->
-          Bench.update_bench_status ~bot_info ~repo_config_table ~job_info
-            (gh_owner, gh_repo) ~external_id ~number:pr_num
-      | _, _ -> (
+      let repo_config =
+        get_repo_config_opt ~owner:gh_owner ~repo:gh_repo repo_config_table
+      in
+      (* Original: hardcoded check for "rocq-prover/rocq", "bench"
+         Now: use repo_config.jobs.bench if available, fallback to hardcoded check *)
+      let is_bench_job =
+        match repo_config with
+        | Some config -> (
+          match config.jobs with
+          | Some jobs -> (
+            match jobs.bench with
+            | Some bench_job_name ->
+                String.equal job_info.build_name bench_job_name
+            | None ->
+                false )
+          | None ->
+              false )
+        | None ->
+            false
+      in
+      let is_rocq_bench =
+        String.equal github_repo_full_name "rocq-prover/rocq"
+        && String.equal job_info.build_name "bench"
+      in
+      if is_bench_job || is_rocq_bench then
+        Bench.update_bench_status ~bot_info ~repo_config_table ~job_info
+          (gh_owner, gh_repo) ~external_id ~number:pr_num
+      else
         match job_info.build_status with
         | "failed" ->
             let failure_reason = Option.value_exn job_info.failure_reason in
+            (* Original: hardcoded check for "rocq-prover/rocq" for rocq-specific handling
+               Now: use repo_config if available, fallback to hardcoded check *)
+            let is_rocq_repo =
+              match repo_config with
+              | Some config ->
+                  String.equal config.github_owner "rocq-prover"
+                  && String.equal config.github_repo "rocq"
+              | None ->
+                  String.equal github_repo_full_name "rocq-prover/rocq"
+            in
             let summary_builder, allow_failure_handler =
-              if String.equal github_repo_full_name "rocq-prover/rocq" then
+              if is_rocq_repo then
                 ( Job_status_rocq.rocq_summary_builder
                 , fun ~bot_info ~job_name ~job_url ~pr_num ~head_commit
                       (gh_owner, gh_repo) ~gitlab_repo_full_name ->
@@ -54,13 +88,8 @@ let job_action ~bot_info ~repo_config_table
             Job_status.job_success_or_pending ~bot_info (gh_owner, gh_repo)
               job_info ~github_repo_full_name ~gitlab_domain
               ~gitlab_repo_full_name ~context ~state ~external_id
-            <&>
-            let repo_config =
-              Repo_config.get_repo_config_opt ~owner:gh_owner ~repo:gh_repo
-                repo_config_table
-            in
-            Documentation.send_doc_url ~bot_info ~github_repo_full_name
-              ?repo_config job_info
+            <&> Documentation.send_doc_url ~bot_info ~github_repo_full_name
+                  ?repo_config job_info
         | ("created" | "running") as state ->
             Job_status.job_success_or_pending ~bot_info (gh_owner, gh_repo)
               job_info ~github_repo_full_name ~gitlab_domain
@@ -73,4 +102,4 @@ let job_action ~bot_info ~repo_config_table
                request. *)
             Lwt.return_unit
         | unknown_state ->
-            Lwt_io.printlf "Unknown job status: %s" unknown_state ) )
+            Lwt_io.printlf "Unknown job status: %s" unknown_state )
