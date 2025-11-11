@@ -13,4 +13,14 @@
 (test
  (name repo_config_test)
  (libraries base bot-components config alcotest)
- (modules repo_config_test))
+ (modules repo_config_test_helpers repo_config_test))
+
+(test
+ (name repo_config_error_test)
+ (libraries base bot-components config alcotest)
+ (modules repo_config_test_helpers repo_config_error_test))
+
+(test
+ (name repo_config_property_test)
+ (libraries base bot-components config alcotest qcheck-alcotest)
+ (modules repo_config_property_test))
