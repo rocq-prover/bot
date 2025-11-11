@@ -9,73 +9,126 @@ open String_utils
 open Utils
 open Bot_components.Git_utils
 open Lwt.Infix
+open Repo_config
 
 (* Handles push events for different repositories (e.g., Rocq community, Math Comp, etc.) *)
-let handle_push_event_for_repos ~bot_info ~key ~app_id ~install_id ~owner ~repo
-    ~base_ref ~head_sha =
-  match (owner, repo) with
-  | "rocq-community", ("docker-base" | "docker-coq" | "docker-rocq") ->
-      (fun () ->
-        init_git_bare_repository ~bot_info
-        >>= fun () ->
-        Bot_components.Github_installations.action_as_github_app_from_install_id
-          ~bot_info ~key ~app_id ~install_id
-          (mirror_action ~gitlab_domain:"gitlab.com" ~gh_owner:owner
-             ~gh_repo:repo ~gl_owner:owner ~gl_repo:repo ~base_ref ~head_sha () )
-        )
-      |> Lwt.async ;
-      Server.respond_string ~status:`OK
-        ~body:
-          (f
-             "Processing push event on %s/%s repository: mirroring branch on \
-              GitLab."
-             owner repo )
-        ()
-  | "math-comp", ("docker-mathcomp" | "math-comp") ->
-      (fun () ->
-        init_git_bare_repository ~bot_info
-        >>= fun () ->
-        Bot_components.Github_installations.action_as_github_app_from_install_id
-          ~bot_info ~key ~app_id ~install_id
-          (mirror_action ~gitlab_domain:"gitlab.inria.fr" ~gh_owner:owner
-             ~gh_repo:repo ~gl_owner:owner ~gl_repo:repo ~base_ref ~head_sha () )
-        )
-      |> Lwt.async ;
-      Server.respond_string ~status:`OK
-        ~body:
-          (f
-             "Processing push event on %s/%s repository: mirroring branch on \
-              GitLab."
-             owner repo )
-        ()
-  | "rocq-prover", ("opam" | "docker-rocq") ->
-      (fun () ->
-        init_git_bare_repository ~bot_info
-        >>= fun () ->
-        Bot_components.Github_installations.action_as_github_app_from_install_id
-          ~bot_info ~key ~app_id ~install_id
-          (mirror_action ~gitlab_domain:"gitlab.inria.fr"
-             ~gh_owner:"rocq-prover" ~gh_repo:repo ~gl_owner:"coq" ~gl_repo:repo
-             ~base_ref ~head_sha () ) )
-      |> Lwt.async ;
-      Server.respond_string ~status:`OK
-        ~body:
-          (f
-             "Processing push event on %s/%s repository: mirroring branch on \
-              GitLab."
-             owner repo )
-        ()
-  | _ ->
-      Server.respond_string ~status:`OK ~body:"Ignoring push event." ()
+let handle_push_event_for_repos ~bot_info ~key ~app_id ~install_id
+    ~repo_config_table ~owner ~repo ~base_ref ~head_sha =
+  (* Original: hardcoded pattern matching on specific owner/repo combinations
+     with different GitLab domains:
+     - "rocq-community" repos -> "gitlab.com"
+     - "math-comp" repos -> "gitlab.inria.fr"
+     - "rocq-prover" repos -> "gitlab.inria.fr"
+     Now: use repo_config if available (each repo can have its own gitlab_domain),
+     fallback to original hardcoded logic for backward compatibility *)
+  match get_repo_config_opt ~owner ~repo repo_config_table with
+  | Some config -> (
+    (* Use the GitLab domain/owner/repo from config (e.g., "gitlab.com" or "gitlab.inria.fr")
+       Each repository can have a different GitLab domain configured *)
+    match (config.gitlab_domain, config.gitlab_owner, config.gitlab_repo) with
+    | Some domain, Some gl_owner, Some gl_repo ->
+        (fun () ->
+          init_git_bare_repository ~bot_info
+          >>= fun () ->
+          Bot_components.Github_installations
+          .action_as_github_app_from_install_id ~bot_info ~key ~app_id
+            ~install_id
+            (mirror_action ~gitlab_domain:domain ~gh_owner:owner ~gh_repo:repo
+               ~gl_owner ~gl_repo ~base_ref ~head_sha () ) )
+        |> Lwt.async ;
+        Server.respond_string ~status:`OK
+          ~body:
+            (f
+               "Processing push event on %s/%s repository: mirroring branch on \
+                GitLab."
+               owner repo )
+          ()
+    | _ ->
+        Server.respond_string ~status:`OK ~body:"Ignoring push event." () )
+  | None -> (
+    (* Fallback to original hardcoded logic for backward compatibility *)
+    match (owner, repo) with
+    | "rocq-community", ("docker-base" | "docker-coq" | "docker-rocq") ->
+        (fun () ->
+          init_git_bare_repository ~bot_info
+          >>= fun () ->
+          Bot_components.Github_installations
+          .action_as_github_app_from_install_id ~bot_info ~key ~app_id
+            ~install_id
+            (mirror_action ~gitlab_domain:"gitlab.com" ~gh_owner:owner
+               ~gh_repo:repo ~gl_owner:owner ~gl_repo:repo ~base_ref ~head_sha
+               () ) )
+        |> Lwt.async ;
+        Server.respond_string ~status:`OK
+          ~body:
+            (f
+               "Processing push event on %s/%s repository: mirroring branch on \
+                GitLab."
+               owner repo )
+          ()
+    | "math-comp", ("docker-mathcomp" | "math-comp") ->
+        (fun () ->
+          init_git_bare_repository ~bot_info
+          >>= fun () ->
+          Bot_components.Github_installations
+          .action_as_github_app_from_install_id ~bot_info ~key ~app_id
+            ~install_id
+            (mirror_action ~gitlab_domain:"gitlab.inria.fr" ~gh_owner:owner
+               ~gh_repo:repo ~gl_owner:owner ~gl_repo:repo ~base_ref ~head_sha
+               () ) )
+        |> Lwt.async ;
+        Server.respond_string ~status:`OK
+          ~body:
+            (f
+               "Processing push event on %s/%s repository: mirroring branch on \
+                GitLab."
+               owner repo )
+          ()
+    | "rocq-prover", ("opam" | "docker-rocq") ->
+        (fun () ->
+          init_git_bare_repository ~bot_info
+          >>= fun () ->
+          Bot_components.Github_installations
+          .action_as_github_app_from_install_id ~bot_info ~key ~app_id
+            ~install_id
+            (mirror_action ~gitlab_domain:"gitlab.inria.fr"
+               ~gh_owner:"rocq-prover" ~gh_repo:repo ~gl_owner:"coq"
+               ~gl_repo:repo ~base_ref ~head_sha () ) )
+        |> Lwt.async ;
+        Server.respond_string ~status:`OK
+          ~body:
+            (f
+               "Processing push event on %s/%s repository: mirroring branch on \
+                GitLab."
+               owner repo )
+          ()
+    | _ ->
+        Server.respond_string ~status:`OK ~body:"Ignoring push event." () )
 
 (* Handles all comment-related events (minimization, CI commands, bench commands, etc.)*)
 let handle_comment_created ~bot_info ~key ~app_id ~github_bot_name
-    ~gitlab_mapping ~github_mapping ~install_id
+    ~gitlab_mapping ~github_mapping ~install_id ~repo_config_table
     ~(comment_info : Bot_components.GitHub_types.comment_info)
     ~minimize_text_of_body ~ci_minimize_text_of_body
     ~resume_ci_minimize_text_of_body =
   let body =
     comment_info.body |> trim_comments |> strip_quoted_bot_name ~github_bot_name
+  in
+  let owner = comment_info.issue.issue.owner in
+  let repo = comment_info.issue.issue.repo in
+  let repo_config = get_repo_config_opt ~owner ~repo repo_config_table in
+  (* Original: hardcoded minimizer URL "https://github.com/rocq-community/run-coq-bug-minimizer/actions"
+     Now: use repo_config.minimizer_url if available, fallback to hardcoded value *)
+  let minimizer_url =
+    match repo_config with
+    | Some config -> (
+      match config.minimizer_url with
+      | Some url ->
+          url
+      | None ->
+          "https://github.com/rocq-community/run-coq-bug-minimizer/actions" )
+    | None ->
+        "https://github.com/rocq-community/run-coq-bug-minimizer/actions"
   in
   match minimize_text_of_body body with
   | Some (options, script) ->
@@ -83,15 +136,11 @@ let handle_comment_created ~bot_info ~key ~app_id ~github_bot_name
         init_git_bare_repository ~bot_info
         >>= fun () ->
         Bot_components.Github_installations.action_as_github_app ~bot_info ~key
-          ~app_id ~owner:comment_info.issue.issue.owner (fun ~bot_info ->
+          ~app_id ~owner (fun ~bot_info ->
             Minimization.run_coq_minimizer ~bot_info ~script
               ~comment_thread_id:comment_info.issue.id
-              ~comment_author:comment_info.author
-              ~owner:comment_info.issue.issue.owner
-              ~repo:comment_info.issue.issue.repo ~options
-              ~minimizer_url:
-                "https://github.com/rocq-community/run-coq-bug-minimizer/actions" )
-        )
+              ~comment_author:comment_info.author ~owner ~repo ~options
+              ~minimizer_url ) )
       |> Lwt.async ;
       Server.respond_string ~status:`OK ~body:"Handling minimization." ()
   | None -> (
@@ -125,6 +174,8 @@ let handle_comment_created ~bot_info ~key ~app_id ~github_bot_name
           |> Lwt.async ;
           Server.respond_string ~status:`OK ~body:"Handling CI minimization." ()
       | None ->
+          (* Original: hardcoded check for "rocq-prover"/"rocq"
+             Now: check if repo has config (or fallback to hardcoded check) *)
           if
             string_match
               ~regexp:
@@ -132,8 +183,9 @@ let handle_comment_created ~bot_info ~key ~app_id ~github_bot_name
                 @@ Str.quote github_bot_name )
               body
             && comment_info.issue.pull_request
-            && String.equal comment_info.issue.issue.owner "rocq-prover"
-            && String.equal comment_info.issue.issue.repo "rocq"
+            && ( has_repo_config ~owner ~repo repo_config_table
+               || (String.equal owner "rocq-prover" && String.equal repo "rocq")
+               )
             && Option.is_some install_id
           then
             let full_ci =
@@ -158,8 +210,9 @@ let handle_comment_created ~bot_info ~key ~app_id ~github_bot_name
               ~regexp:(f "@%s:? [Mm]erge now" @@ Str.quote github_bot_name)
               body
             && comment_info.issue.pull_request
-            && String.equal comment_info.issue.issue.owner "rocq-prover"
-            && String.equal comment_info.issue.issue.repo "rocq"
+            && ( has_repo_config ~owner ~repo repo_config_table
+               || (String.equal owner "rocq-prover" && String.equal repo "rocq")
+               )
             && Option.is_some install_id
           then (
             (fun () ->
@@ -177,8 +230,9 @@ let handle_comment_created ~bot_info ~key ~app_id ~github_bot_name
               ~regexp:(f "@%s:? [Bb]ench native" @@ Str.quote github_bot_name)
               body
             && comment_info.issue.pull_request
-            && String.equal comment_info.issue.issue.owner "rocq-prover"
-            && String.equal comment_info.issue.issue.repo "rocq"
+            && ( has_repo_config ~owner ~repo repo_config_table
+               || (String.equal owner "rocq-prover" && String.equal repo "rocq")
+               )
             && Option.is_some install_id
           then (
             (fun () ->
@@ -197,8 +251,9 @@ let handle_comment_created ~bot_info ~key ~app_id ~github_bot_name
               ~regexp:(f "@%s:? [Bb]ench" @@ Str.quote github_bot_name)
               body
             && comment_info.issue.pull_request
-            && String.equal comment_info.issue.issue.owner "rocq-prover"
-            && String.equal comment_info.issue.issue.repo "rocq"
+            && ( has_repo_config ~owner ~repo repo_config_table
+               || (String.equal owner "rocq-prover" && String.equal repo "rocq")
+               )
             && Option.is_some install_id
           then (
             (fun () ->
@@ -215,8 +270,8 @@ let handle_comment_created ~bot_info ~key ~app_id ~github_bot_name
               () ) )
 
 let handle_github_webhook ~bot_info ~key ~app_id ~github_bot_name
-    ~gitlab_mapping ~github_mapping ~github_webhook_secret ~headers ~body
-    ~minimize_text_of_body ~ci_minimize_text_of_body
+    ~gitlab_mapping ~github_mapping ~repo_config_table ~github_webhook_secret
+    ~headers ~body ~minimize_text_of_body ~ci_minimize_text_of_body
     ~resume_ci_minimize_text_of_body =
   body
   >>= fun body ->
@@ -242,31 +297,69 @@ let handle_github_webhook ~bot_info ~key ~app_id ~github_bot_name
       |> Lwt.async ) ;
   match result with
   | Ok
-      ( Some install_id
-      , PushEvent
-          {owner= "rocq-prover"; repo= "rocq"; base_ref; head_sha; commits_msg}
-      ) ->
-      (fun () ->
-        init_git_bare_repository ~bot_info
-        >>= fun () ->
-        Bot_components.Github_installations.action_as_github_app_from_install_id
-          ~bot_info ~key ~app_id ~install_id
-          (Backport.rocq_push_action ~base_ref ~commits_msg)
-        <&> Bot_components.Github_installations
+      (Some install_id, PushEvent {owner; repo; base_ref; head_sha; commits_msg})
+    -> (
+      (* Original: hardcoded pattern for "rocq-prover"/"rocq"
+         Now: check if repo has config (or fallback to hardcoded check) *)
+      let is_rocq =
+        String.equal owner "rocq-prover" && String.equal repo "rocq"
+      in
+      match get_repo_config_opt ~owner ~repo repo_config_table with
+      | Some config when is_rocq || Option.is_some config.gitlab_domain ->
+          (* Use config if available *)
+          let gitlab_domain, gl_owner, gl_repo =
+            match
+              (config.gitlab_domain, config.gitlab_owner, config.gitlab_repo)
+            with
+            | Some domain, Some gl_owner, Some gl_repo ->
+                (domain, gl_owner, gl_repo)
+            | _ ->
+                ("gitlab.inria.fr", "coq", "coq")
+          in
+          (fun () ->
+            init_git_bare_repository ~bot_info
+            >>= fun () ->
+            Bot_components.Github_installations
             .action_as_github_app_from_install_id ~bot_info ~key ~app_id
               ~install_id
-              (mirror_action ~gitlab_domain:"gitlab.inria.fr"
-                 ~gh_owner:"rocq-prover" ~gh_repo:"rocq" ~gl_owner:"coq"
-                 ~gl_repo:"coq" ~base_ref ~head_sha () ) )
-      |> Lwt.async ;
-      Server.respond_string ~status:`OK
-        ~body:
-          "Processing push event on the Rocq Prover repository: analyzing \
-           merge / backporting info."
-        ()
-  | Ok (Some install_id, PushEvent {owner; repo; base_ref; head_sha; _}) ->
-      handle_push_event_for_repos ~bot_info ~key ~app_id ~install_id ~owner
-        ~repo ~base_ref ~head_sha
+              (Backport.rocq_push_action ~base_ref ~commits_msg)
+            <&> Bot_components.Github_installations
+                .action_as_github_app_from_install_id ~bot_info ~key ~app_id
+                  ~install_id
+                  (mirror_action ~gitlab_domain ~gh_owner:owner ~gh_repo:repo
+                     ~gl_owner ~gl_repo ~base_ref ~head_sha () ) )
+          |> Lwt.async ;
+          Server.respond_string ~status:`OK
+            ~body:
+              "Processing push event on the Rocq Prover repository: analyzing \
+               merge / backporting info."
+            ()
+      | None when is_rocq ->
+          (* Fallback to hardcoded rocq-prover/rocq logic *)
+          let gitlab_domain, gl_owner, gl_repo =
+            ("gitlab.inria.fr", "coq", "coq")
+          in
+          (fun () ->
+            init_git_bare_repository ~bot_info
+            >>= fun () ->
+            Bot_components.Github_installations
+            .action_as_github_app_from_install_id ~bot_info ~key ~app_id
+              ~install_id
+              (Backport.rocq_push_action ~base_ref ~commits_msg)
+            <&> Bot_components.Github_installations
+                .action_as_github_app_from_install_id ~bot_info ~key ~app_id
+                  ~install_id
+                  (mirror_action ~gitlab_domain ~gh_owner:owner ~gh_repo:repo
+                     ~gl_owner ~gl_repo ~base_ref ~head_sha () ) )
+          |> Lwt.async ;
+          Server.respond_string ~status:`OK
+            ~body:
+              "Processing push event on the Rocq Prover repository: analyzing \
+               merge / backporting info."
+            ()
+      | _ ->
+          handle_push_event_for_repos ~bot_info ~key ~app_id ~install_id
+            ~repo_config_table ~owner ~repo ~base_ref ~head_sha )
   | Ok (_, PullRequestUpdated (PullRequestClosed, pr_info)) ->
       (fun () ->
         init_git_bare_repository ~bot_info
@@ -305,28 +398,53 @@ let handle_github_webhook ~bot_info ~key ~app_id ~github_bot_name
              issue.repo issue.number )
         ()
   | Ok
-      ( Some (1062161 as install_id) (* Rocq's installation number *)
+      ( Some install_id
       , PullRequestCardEdited
-          { project_number= 11 (* Rocq's backporting project number *)
+          { project_number
           ; pr_id
           ; field
           ; old_value= Some "Request inclusion"
           ; new_value= Some "Rejected" } )
     when String.is_suffix ~suffix:" status" field ->
-      let backport_to = String.drop_suffix field 7 in
-      (fun () ->
-        Bot_components.Github_installations.action_as_github_app_from_install_id
-          ~bot_info ~key ~app_id ~install_id (fun ~bot_info ->
-            GitHub_automation.project_action ~bot_info ~pr_id ~backport_to () )
-        )
-      |> Lwt.async ;
-      Server.respond_string ~status:`OK
-        ~body:
-          (f
-             "PR proposed for backporting was rejected from inclusion in %s. \
-              Updating the milestone."
-             backport_to )
-        ()
+      (* Original: hardcoded install_id=1062161 and project_number=11 for rocq
+         Now: check if install_id and project_number match any repo_config *)
+      let matches_rocq_config =
+        match
+          get_repo_config_opt ~owner:"rocq-prover" ~repo:"rocq"
+            repo_config_table
+        with
+        | Some config -> (
+          match
+            (config.github_installation_id, config.github_project_number)
+          with
+          | Some config_install_id, Some config_project_number ->
+              Int.equal install_id config_install_id
+              && Int.equal project_number config_project_number
+          | _ ->
+              false )
+        | None ->
+            (* Fallback to original hardcoded values for backward compatibility *)
+            Int.equal install_id 1062161 && Int.equal project_number 11
+      in
+      if matches_rocq_config then (
+        let backport_to = String.drop_suffix field 7 in
+        (fun () ->
+          Bot_components.Github_installations
+          .action_as_github_app_from_install_id ~bot_info ~key ~app_id
+            ~install_id (fun ~bot_info ->
+              GitHub_automation.project_action ~bot_info ~pr_id ~backport_to () )
+          )
+        |> Lwt.async ;
+        Server.respond_string ~status:`OK
+          ~body:
+            (f
+               "PR proposed for backporting was rejected from inclusion in %s. \
+                Updating the milestone."
+               backport_to )
+          () )
+      else
+        Server.respond_string ~status:`OK
+          ~body:"Unsupported pull request card edition." ()
   | Ok (_, PullRequestCardEdited _) ->
       Server.respond_string ~status:`OK
         ~body:"Unsupported pull request card edition." ()
@@ -356,8 +474,8 @@ let handle_github_webhook ~bot_info ~key ~app_id ~github_bot_name
             () )
   | Ok (install_id, CommentCreated comment_info) ->
       handle_comment_created ~bot_info ~key ~app_id ~github_bot_name
-        ~gitlab_mapping ~github_mapping ~install_id ~comment_info
-        ~minimize_text_of_body ~ci_minimize_text_of_body
+        ~gitlab_mapping ~github_mapping ~install_id ~repo_config_table
+        ~comment_info ~minimize_text_of_body ~ci_minimize_text_of_body
         ~resume_ci_minimize_text_of_body
   | Ok (None, CheckRunReRequested _) ->
       Server.respond_string ~status:(Code.status_of_code 401)
