@@ -124,3 +124,5 @@ let make_mappings_table toml_data =
         (Hashtbl.create (module String), Hashtbl.create (module String))
   with Stdlib.Not_found ->
     (Hashtbl.create (module String), Hashtbl.create (module String))
+
+let repo_config_table toml_data = Repo_config.create_repo_config_table toml_data

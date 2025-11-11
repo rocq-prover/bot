@@ -24,3 +24,6 @@ val github_private_key : unit -> Mirage_crypto_pk.Rsa.priv
 val make_mappings_table :
      Toml.Types.value Toml.Types.Table.t
   -> (string, string * string) Base.Hashtbl.t * (string, string) Base.Hashtbl.t
+
+val repo_config_table :
+  Toml.Types.table -> (string, Repo_config.t) Base.Hashtbl.t
