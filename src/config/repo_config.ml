@@ -259,3 +259,31 @@ let get_repo_config_opt ~owner ~repo repo_config_table =
 let has_repo_config ~owner ~repo repo_config_table =
   let key = f "%s/%s" owner repo in
   Hashtbl.mem repo_config_table key
+
+(** Check if a repository config has CI configuration *)
+let has_ci_config config = Option.is_some config.ci_config
+
+(** Check if a repository config has minimizer URL configured *)
+let has_minimizer config = Option.is_some config.minimizer_url
+
+(** Find first repository with CI configuration *)
+let find_repo_with_ci_config repo_config_table =
+  Hashtbl.fold repo_config_table ~init:None ~f:(fun ~key:_ ~data:config acc ->
+      match acc with
+      | Some _ ->
+          acc (* Already found one *)
+      | None when has_ci_config config ->
+          Some (config.github_owner, config.github_repo)
+      | None ->
+          None )
+
+(** Find first repository with minimizer URL configured *)
+let find_repo_with_minimizer repo_config_table =
+  Hashtbl.fold repo_config_table ~init:None ~f:(fun ~key:_ ~data:config acc ->
+      match acc with
+      | Some _ ->
+          acc (* Already found one *)
+      | None when has_minimizer config ->
+          Some (config.github_owner, config.github_repo)
+      | None ->
+          None )
