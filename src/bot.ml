@@ -61,7 +61,7 @@ let callback _conn req body =
       Minimizer.handle_minimizer_webhook ~bot_info ~key ~app_id ~endpoint:path
         ~body
   | "/check-stale-pr" ->
-      Scheduled.handle_stale_pr_check ~bot_info ~key ~app_id
+      Scheduled.handle_stale_pr_check ~bot_info ~key ~app_id ~repo_config_table
         ~daily_schedule_secret ~body
   | _ ->
       Server.respond_not_found ()

@@ -203,8 +203,9 @@ let handle_comment_created ~bot_info ~key ~app_id ~github_bot_name
             >>= fun () ->
             Bot_components.Github_installations.action_as_github_app ~bot_info
               ~key ~app_id ~owner:comment_info.issue.issue.owner
-              (Pr_sync.run_ci_action ~comment_info ?full_ci ~gitlab_mapping
-                 ~github_mapping () )
+              (fun ~bot_info ->
+                Pr_sync.run_ci_action ~bot_info ~repo_config_table ~comment_info
+                  ?full_ci ~gitlab_mapping ~github_mapping () )
           else if
             string_match
               ~regexp:(f "@%s:? [Mm]erge now" @@ Str.quote github_bot_name)
@@ -380,10 +381,8 @@ let handle_github_webhook ~bot_info ~key ~app_id ~github_bot_name
   | Ok (_, PullRequestUpdated (action, pr_info)) ->
       init_git_bare_repository ~bot_info
       >>= fun () ->
-      Bot_components.Github_installations.action_as_github_app ~bot_info ~key
-        ~app_id ~owner:pr_info.issue.issue.owner
-        (Pr_sync.pull_request_updated_action ~action ~pr_info ~gitlab_mapping
-           ~github_mapping )
+      Pr_sync.pull_request_updated_action ~bot_info ~repo_config_table ~action
+        ~pr_info ~gitlab_mapping ~github_mapping
   | Ok (_, IssueClosed {issue}) ->
       (* TODO: only for projects that requested this feature *)
       (fun () ->
