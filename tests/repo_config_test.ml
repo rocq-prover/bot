@@ -6,9 +6,9 @@ open Repo_config_test_helpers
 
 let test_minimal_config () =
   let toml_str = {|
-[repositories.rocq]
-github = "rocq-prover/rocq"
-|} in
+  [repositories.rocq]
+  github = "rocq-prover/rocq"
+  |} in
   let toml_data = Utils.toml_of_string toml_str in
   let configs = parse_all_repo_configs toml_data in
   check
@@ -218,9 +218,14 @@ github = "coq/coq"
   check bool "doesn't have unknown config"
     (has_repo_config ~owner:"unknown" ~repo:"repo" table)
     false ;
-  let rocq_config = get_repo_config ~owner:"rocq-prover" ~repo:"rocq" table in
+  let rocq_config =
+    Option.value_exn
+      (get_repo_config_opt ~owner:"rocq-prover" ~repo:"rocq" table)
+  in
   check string "table lookup rocq" rocq_config.github_repo "rocq" ;
-  let coq_config = get_repo_config ~owner:"coq" ~repo:"coq" table in
+  let coq_config =
+    Option.value_exn (get_repo_config_opt ~owner:"coq" ~repo:"coq" table)
+  in
   check string "table lookup coq" coq_config.github_repo "coq"
 
 let test_pipe_separated_jobs () =

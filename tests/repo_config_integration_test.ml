@@ -3,6 +3,7 @@ open Bot_components
 open Config
 open Repo_config
 open Alcotest
+open Repo_config_test_helpers
 
 (* Integration tests for repo_config loading from TOML files *)
 
@@ -18,7 +19,10 @@ let test_load_from_toml_file () =
   check bool "should have rocq config"
     (has_repo_config ~owner:"rocq-prover" ~repo:"rocq" table)
     true ;
-  let rocq_config = get_repo_config ~owner:"rocq-prover" ~repo:"rocq" table in
+  let rocq_config =
+    Option.value_exn
+      (get_repo_config_opt ~owner:"rocq-prover" ~repo:"rocq" table)
+  in
   check string "rocq github_owner" rocq_config.github_owner "rocq-prover" ;
   check string "rocq github_repo" rocq_config.github_repo "rocq" ;
   check (option int) "rocq installation_id" rocq_config.github_installation_id
@@ -102,7 +106,9 @@ let test_multiple_repositories_in_table () =
     (has_repo_config ~owner:"ocaml" ~repo:"opam" table)
     true ;
   (* Verify coq/coq config *)
-  let coq_config = get_repo_config ~owner:"coq" ~repo:"coq" table in
+  let coq_config =
+    Option.value_exn (get_repo_config_opt ~owner:"coq" ~repo:"coq" table)
+  in
   check string "coq github_owner" coq_config.github_owner "coq" ;
   check string "coq github_repo" coq_config.github_repo "coq" ;
   check (option int) "coq installation_id" coq_config.github_installation_id
@@ -123,7 +129,9 @@ let test_multiple_repositories_in_table () =
   | None ->
       Alcotest.fail "Expected jobs config for coq" ) ;
   (* Verify opam config (minimal) *)
-  let opam_config = get_repo_config ~owner:"ocaml" ~repo:"opam" table in
+  let opam_config =
+    Option.value_exn (get_repo_config_opt ~owner:"ocaml" ~repo:"opam" table)
+  in
   check string "opam github_owner" opam_config.github_owner "ocaml" ;
   check string "opam github_repo" opam_config.github_repo "opam" ;
   check (option string) "opam org_name" opam_config.org_name (Some "ocaml") ;
@@ -133,17 +141,12 @@ let test_multiple_repositories_in_table () =
   check bool "should not have unknown config"
     (has_repo_config ~owner:"unknown" ~repo:"repo" table)
     false ;
-  (* Verify get_repo_config raises for non-existent repo *)
-  try
-    get_repo_config ~owner:"unknown" ~repo:"repo" table |> ignore ;
-    Alcotest.fail "Expected exception for non-existent repo"
-  with
-  | Not_found_s _ ->
-      () (* Expected *)
-  | e ->
-      Alcotest.fail
-        (Printf.sprintf "Expected Not_found_s exception, but got: %s"
-           (Exn.to_string e) )
+  (* Verify get_repo_config_opt returns None for non-existent repo *)
+  check
+    (option repo_config_testable)
+    "non-existent repo returns None"
+    (get_repo_config_opt ~owner:"unknown" ~repo:"repo" table)
+    None
 
 let test_table_lookup_performance () =
   (* Test that table lookups work correctly for all entries *)
@@ -151,9 +154,16 @@ let test_table_lookup_performance () =
   let toml_data = Utils.toml_of_file config_file in
   let table = repo_config_table toml_data in
   (* Test all lookups work *)
-  let rocq = get_repo_config ~owner:"rocq-prover" ~repo:"rocq" table in
-  let coq = get_repo_config ~owner:"coq" ~repo:"coq" table in
-  let opam = get_repo_config ~owner:"ocaml" ~repo:"opam" table in
+  let rocq =
+    Option.value_exn
+      (get_repo_config_opt ~owner:"rocq-prover" ~repo:"rocq" table)
+  in
+  let coq =
+    Option.value_exn (get_repo_config_opt ~owner:"coq" ~repo:"coq" table)
+  in
+  let opam =
+    Option.value_exn (get_repo_config_opt ~owner:"ocaml" ~repo:"opam" table)
+  in
   (* Verify all configs are distinct *)
   check bool "rocq and coq should be different"
     (not (String.equal rocq.github_owner coq.github_owner))
