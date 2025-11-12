@@ -411,8 +411,8 @@ let apply_after_label ~bot_info ~owner ~repo ~after ~label ~action ~throttle ()
   | Error err ->
       Lwt_io.print (f "Error: %s\n" err)
 
-let rocq_check_needs_rebase_pr ~bot_info ~repo_config_table ~owner ~repo
-    ~warn_after ~close_after ~throttle =
+let check_needs_rebase_pr ~bot_info ~repo_config_table ~owner ~repo ~warn_after
+    ~close_after ~throttle =
   let repo_config = get_repo_config_opt ~owner ~repo repo_config_table in
   (* Original: hardcoded labels "needs: rebase", "stale", "needs: independent fix"
      Now: use repo_config.labels if available, fallback to hardcoded values *)
@@ -486,8 +486,7 @@ let rocq_check_needs_rebase_pr ~bot_info ~repo_config_table ~owner ~repo
   | Error err ->
       Lwt_io.print (f "Error: %s\n" err)
 
-let rocq_check_stale_pr ~bot_info ~repo_config_table ~owner ~repo ~after
-    ~throttle =
+let check_stale_pr ~bot_info ~repo_config_table ~owner ~repo ~after ~throttle =
   let repo_config = get_repo_config_opt ~owner ~repo repo_config_table in
   (* Original: hardcoded label "stale"
      Now: use repo_config.labels if available, fallback to hardcoded value *)

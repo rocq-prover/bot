@@ -1,4 +1,4 @@
-val rocq_push_action :
+val push_action :
      bot_info:Bot_components.Bot_info.t
   -> repo_config_table:(string, Repo_config.t) Base.Hashtbl.t
   -> owner:string

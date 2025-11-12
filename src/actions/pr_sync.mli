@@ -19,7 +19,7 @@ val pull_request_updated_action :
   -> github_mapping:(string, string * string) Base.Hashtbl.t
   -> (Cohttp.Response.t * Cohttp_lwt__.Body.t) Lwt.t
 
-val rocq_check_needs_rebase_pr :
+val check_needs_rebase_pr :
      bot_info:Bot_components.Bot_info.t
   -> repo_config_table:(string, Repo_config.t) Base.Hashtbl.t
   -> owner:string
@@ -29,7 +29,7 @@ val rocq_check_needs_rebase_pr :
   -> throttle:int
   -> unit Lwt.t
 
-val rocq_check_stale_pr :
+val check_stale_pr :
      bot_info:Bot_components.Bot_info.t
   -> repo_config_table:(string, Repo_config.t) Base.Hashtbl.t
   -> owner:string

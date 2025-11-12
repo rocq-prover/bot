@@ -5,8 +5,8 @@ open Lwt.Infix
 open Lwt.Syntax
 open Repo_config
 
-let rocq_push_action ~bot_info ~repo_config_table ~owner ~repo ~base_ref
-    ~commits_msg =
+let push_action ~bot_info ~repo_config_table ~owner ~repo ~base_ref ~commits_msg
+    =
   (* Refactored to remove hardcoded repository checks
 
      Before: Had hardcoded check for "rocq-prover"/"rocq" that always processed.
