@@ -37,3 +37,72 @@
  (name config_resolver_test)
  (libraries base bot-components config alcotest lwt lwt.unix)
  (modules test_helpers config_resolver_test))
+
+(test
+ (name refactored_code_test_helpers)
+ (libraries base bot-components config utils)
+ (modules refactored_code_test_helpers))
+
+(test
+ (name refactored_code_generic_test)
+ (libraries base bot-components config alcotest utils)
+ (modules
+  repo_config_test_helpers
+  refactored_code_test_helpers
+  refactored_code_generic_test))
+
+(test
+ (name refactored_code_backport_test)
+ (libraries base bot-components config alcotest)
+ (modules
+  repo_config_test_helpers
+  refactored_code_test_helpers
+  refactored_code_backport_test))
+
+(test
+ (name refactored_code_jobs_test)
+ (libraries base bot-components config alcotest)
+ (modules
+  repo_config_test_helpers
+  refactored_code_test_helpers
+  refactored_code_jobs_test))
+
+(test
+ (name refactored_code_ci_test)
+ (libraries base bot-components config alcotest)
+ (modules
+  repo_config_test_helpers
+  refactored_code_test_helpers
+  refactored_code_ci_test))
+
+(test
+ (name refactored_code_documentation_test)
+ (libraries base bot-components config alcotest)
+ (modules
+  repo_config_test_helpers
+  refactored_code_test_helpers
+  refactored_code_documentation_test))
+
+(test
+ (name refactored_code_gitlab_test)
+ (libraries base bot-components config alcotest)
+ (modules
+  repo_config_test_helpers
+  refactored_code_test_helpers
+  refactored_code_gitlab_test))
+
+(test
+ (name refactored_code_bench_test)
+ (libraries base bot-components config alcotest)
+ (modules
+  repo_config_test_helpers
+  refactored_code_test_helpers
+  refactored_code_bench_test))
+
+(test
+ (name refactored_code_edge_cases_test)
+ (libraries base bot-components config alcotest utils)
+ (modules
+  repo_config_test_helpers
+  refactored_code_test_helpers
+  refactored_code_edge_cases_test))
