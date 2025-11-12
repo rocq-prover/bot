@@ -19,6 +19,10 @@ val github_webhook_secret : Toml.Types.table -> string
 
 val github_private_key : unit -> Mirage_crypto_pk.Rsa.priv
 
+val api_timeout : Toml.Types.table -> float
+(** Get API timeout from configuration (bot.api_timeout) or environment variable
+    (API_TIMEOUT). Defaults to 5.0 seconds if not specified. *)
+
 val make_mappings_table :
      Toml.Types.value Toml.Types.Table.t
   -> (string, string * string) Base.Hashtbl.t * (string, string) Base.Hashtbl.t

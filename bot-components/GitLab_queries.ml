@@ -102,10 +102,11 @@ let search_projects_of_resp resp =
         in
         Ok parsed )
 
-(** Search projects with timeout (default 5 seconds).
+(** Search projects with timeout (defaults to bot_info.api_timeout, or 5.0 seconds).
     Uses GraphQL API to find projects matching the search term.
     Returns empty list if no projects found or Error on failure. *)
-let search_projects ~bot_info ~gitlab_domain ~search_term ?(timeout = 5.0) () =
+let search_projects ~bot_info ~gitlab_domain ~search_term
+    ?(timeout = bot_info.api_timeout) () =
   let open GitLab_GraphQL.SearchProjects in
   let open Lwt.Infix in
   let query_lwt =
@@ -141,10 +142,11 @@ let ci_config_file_of_resp ~full_path resp =
         in
         Ok blob_content )
 
-(** Get CI config file content with timeout (default 5 seconds).
+(** Get CI config file content with timeout (defaults to bot_info.api_timeout, or 5.0 seconds).
     Searches for .gitlab-ci.yml or .gitlab-ci.yaml in the repository.
     Returns None if config file not found or Error if project doesn't exist. *)
-let get_ci_config_file ~bot_info ~gitlab_domain ~full_path ?(timeout = 5.0) () =
+let get_ci_config_file ~bot_info ~gitlab_domain ~full_path
+    ?(timeout = bot_info.api_timeout) () =
   let open GitLab_GraphQL.GetCIConfigFile in
   let open Lwt.Infix in
   let query_lwt =

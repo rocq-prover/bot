@@ -4,10 +4,15 @@ type t =
   ; github_name: string
   ; email: string
   ; domain: string
-  ; app_id: int }
+  ; app_id: int
+  ; api_timeout: float
+        (** API timeout in seconds for GitHub/GitLab queries. Defaults to 5.0 if not set. *)
+  }
 
 val github_token : t -> string
 
 val gitlab_token : t -> string -> (string, string) Result.t
 
 val gitlab_name_and_token : t -> string -> (string * string, string) Result.t
+
+val gitlab_instances_keys : t -> string list

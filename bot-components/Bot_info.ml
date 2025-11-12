@@ -6,7 +6,10 @@ type t =
   ; github_name: string
   ; email: string
   ; domain: string
-  ; app_id: int }
+  ; app_id: int
+  ; api_timeout: float
+        (** API timeout in seconds for GitHub/GitLab queries. Defaults to 5.0 if not set. *)
+  }
 
 (* Returns the GitHub installation token. Requires installation token to be set. *)
 let github_token bot_info =
@@ -30,3 +33,5 @@ let gitlab_name_and_token bot_info gitlab_domain =
 
 let gitlab_token bot_info gitlab_domain =
   gitlab_name_and_token bot_info gitlab_domain |> Result.map ~f:snd
+
+let gitlab_instances_keys bot_info = Hashtbl.keys bot_info.gitlab_instances
