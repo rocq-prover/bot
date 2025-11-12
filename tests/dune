@@ -32,3 +32,8 @@
  (name auto_detection_test)
  (libraries base bot-components config alcotest lwt lwt.unix)
  (modules test_helpers auto_detection_test))
+
+(test
+ (name config_resolver_test)
+ (libraries base bot-components config alcotest lwt lwt.unix)
+ (modules test_helpers config_resolver_test))
