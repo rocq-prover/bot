@@ -68,3 +68,11 @@ let extract_backport_info ~(bot_info : Bot_info.t) ~description :
   if String_utils.string_match ~regexp:begin_regexp description then
     Str.matched_group 1 description |> aux
   else []
+
+let with_timeout ~timeout operation =
+  Lwt.pick
+    [ operation
+    ; ( Lwt_unix.sleep timeout
+      >>= fun () ->
+      Lwt.fail (Failure (f "Operation timed out after %.1f seconds" timeout)) )
+    ]

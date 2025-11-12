@@ -21,3 +21,5 @@ type pipeline_info =
   ; variables: (string * string) list
   ; stages: string list
   ; builds: unit job_info list }
+
+type project_info = {id: string; full_path: string; owner: string; repo: string}

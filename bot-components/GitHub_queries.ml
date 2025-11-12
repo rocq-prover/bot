@@ -1003,14 +1003,6 @@ let get_artifact_blob ~bot_info ~owner ~repo ~artifact_id =
     (let open Zip in
      List.map ~f:(fun (entry, contents) -> (entry.filename, contents)) )
 
-let with_timeout ~timeout operation =
-  Lwt.pick
-    [ operation
-    ; ( Lwt_unix.sleep timeout
-      >>= fun () ->
-      Lwt.fail (Failure (f "Operation timed out after %.1f seconds" timeout)) )
-    ]
-
 (** Parse GraphQL response into repository_info type.
     Handles both Organization and User owner types, extracting login from either. *)
 let repository_info_of_resp ~owner ~repo resp =

@@ -18,3 +18,37 @@ module GetRetriedJobs =
     }
   }
 |}]
+
+module SearchProjects =
+  [%graphql
+  {|
+query searchProjects($search: String!) {
+  projects(search: $search, first: 10) {
+    nodes {
+      id
+      fullPath
+      namespace {
+        fullPath
+      }
+      path
+    }
+  }
+}
+|}]
+
+module GetCIConfigFile =
+  [%graphql
+  {|
+query getCIConfig($fullPath: ID!) {
+  project(fullPath: $fullPath) {
+    repository {
+      blobs(paths: [".gitlab-ci.yml", ".gitlab-ci.yaml"]) {
+        nodes {
+          rawBlob
+          path
+        }
+      }
+    }
+  }
+}
+|}]
