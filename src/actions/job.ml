@@ -57,14 +57,32 @@ let job_action ~bot_info ~repo_config_table
             let failure_reason = Option.value_exn job_info.failure_reason in
             (* BEFORE: Had hardcoded check for "rocq-prover/rocq" to use
                rocq-specific handlers *)
-            (* NOW: Use generic handlers for all repos (config-based custom
-               handlers can be added later) *)
+            (* NOW: Use custom handlers if repo has custom_job_status enabled in
+               config *)
             let summary_builder, allow_failure_handler =
-              ( (fun _trace_lines trace_description ->
-                  Lwt.return trace_description )
-              , fun ~bot_info:_ ~job_name:_ ~job_url:_ ~pr_num:_ ~head_commit:_
-                    _ ~gitlab_repo_full_name:_ ->
-                  Lwt.return_unit )
+              match repo_config with
+              | Some config -> (
+                match config.jobs with
+                | Some jobs
+                  when Option.value ~default:false jobs.custom_job_status ->
+                    (* Custom job status handling enabled - use detailed summary
+                       builder *)
+                    ( Job_status.custom_summary_builder
+                    , Job_status.handle_custom_allow_failure )
+                | _ ->
+                    (* Generic handlers *)
+                    ( (fun _trace_lines trace_description ->
+                        Lwt.return trace_description )
+                    , fun ~bot_info:_ ~job_name:_ ~job_url:_ ~pr_num:_
+                          ~head_commit:_ _ ~gitlab_repo_full_name:_ ->
+                        Lwt.return_unit ) )
+              | None ->
+                  (* Generic handlers *)
+                  ( (fun _trace_lines trace_description ->
+                      Lwt.return trace_description )
+                  , fun ~bot_info:_ ~job_name:_ ~job_url:_ ~pr_num:_
+                        ~head_commit:_ _ ~gitlab_repo_full_name:_ ->
+                      Lwt.return_unit )
             in
             Job_status.job_failure ~bot_info job_info ~pr_num
               (gh_owner, gh_repo) ~github_repo_full_name ~gitlab_domain

@@ -75,3 +75,33 @@ val pipeline_action :
   -> ?auto_minimize_on_failure:(string * string) option
   -> unit
   -> unit Lwt.t
+
+(** Custom job info extracted from CI trace *)
+type custom_job_info =
+  { docker_image: string
+  ; dependencies: string list
+  ; targets: string list
+  ; compiler: string
+  ; opam_variant: string }
+
+val extract_custom_job_info : string list -> custom_job_info option
+(** Extract job information from trace lines (Docker image, dependencies, targets, compiler, opam variant) *)
+
+val build_custom_summary_tail :
+  custom_job_info option -> trace_description:string -> string
+(** Build summary tail from custom job info and trace description *)
+
+val handle_custom_allow_failure :
+     bot_info:Bot_components.Bot_info.t
+  -> job_name:string
+  -> job_url:string
+  -> pr_num:int option
+  -> head_commit:string
+  -> string * string
+  -> gitlab_repo_full_name:string
+  -> unit Lwt.t
+(** Handle allow-failure cases (currently has specific handler for library:ci-fiat_crypto_legacy) *)
+
+val custom_summary_builder : string list -> string -> string Lwt.t
+(** Create a summary builder function for repositories with custom job status handling.
+    Returns a function that takes trace_description and returns the summary tail. *)

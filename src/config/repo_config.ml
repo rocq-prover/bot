@@ -22,7 +22,8 @@ type job_config =
   ; doc_refman: string list option (* Pipe-separated string: "job1|job2" *)
   ; doc_init: string option
   ; doc_stdlib: string list option (* Pipe-separated string: "job1|job2" *)
-  ; doc_ml_api: string option }
+  ; doc_ml_api: string option
+  ; custom_job_status: bool option (* Enable custom job status handling *) }
 
 (** Repository-specific documentation paths *)
 type doc_config =
@@ -125,6 +126,19 @@ let parse_job_config toml_data =
   try
     match Utils.find "jobs" toml_data with
     | Toml.Types.TTable job_data ->
+        let get_bool_value table key =
+          try
+            match Utils.find key table with
+            | Toml.Types.TBool b ->
+                Some b
+            | _ ->
+                None
+          with
+          | Stdlib.Not_found ->
+              None
+          | Failure _ ->
+              None
+        in
         Some
           { bench= get_string_value job_data "bench"
           ; doc_refman=
@@ -140,7 +154,8 @@ let parse_job_config toml_data =
                   Some (parse_pipe_separated s)
               | None ->
                   None )
-          ; doc_ml_api= get_string_value job_data "doc_ml_api" }
+          ; doc_ml_api= get_string_value job_data "doc_ml_api"
+          ; custom_job_status= get_bool_value job_data "custom_job_status" }
     | _ ->
         None
   with

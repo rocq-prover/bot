@@ -3,4 +3,4 @@
  (public_name coq-bot.ci)
  (libraries base bot-components coq-bot.utils coq-bot.config)
  (wrapped false)
- (modules documentation job_status job_status_rocq minimization))
+ (modules documentation job_status minimization))

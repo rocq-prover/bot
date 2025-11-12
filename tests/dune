@@ -118,3 +118,11 @@
   repo_config_test_helpers
   refactored_code_test_helpers
   refactored_code_edge_cases_test))
+
+(test
+ (name job_status_custom_test)
+ (libraries base bot-components config alcotest ci lwt lwt.unix)
+ (modules
+  repo_config_test_helpers
+  refactored_code_test_helpers
+  job_status_custom_test))
