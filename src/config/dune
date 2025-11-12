@@ -3,4 +3,4 @@
  (public_name coq-bot.config)
  (libraries base bot-components stdio toml)
  (wrapped false)
- (modules config repo_config default cache))
+ (modules config repo_config default cache auto_detection))

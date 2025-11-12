@@ -27,3 +27,8 @@
  (name cache_test)
  (libraries base bot-components config alcotest utils)
  (modules repo_config_test_helpers cache_test))
+
+(test
+ (name auto_detection_test)
+ (libraries base bot-components config alcotest lwt lwt.unix)
+ (modules test_helpers auto_detection_test))

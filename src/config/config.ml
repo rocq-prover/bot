@@ -115,6 +115,16 @@ let github_private_key () =
   | Error (`Msg e) ->
       failwith (f "Error while decoding RSA key: %s" e)
 
+(** Get API timeout from configuration or environment variable.
+    Defaults to 5.0 seconds if not specified. *)
+let api_timeout toml_data =
+  Option.value_map
+    (subkey_value toml_data "bot" "api_timeout")
+    ~f:Float.of_string
+    ~default:
+      (Option.value_map (Sys.getenv "API_TIMEOUT") ~f:Float.of_string
+         ~default:5.0 )
+
 let make_mappings_table toml_data =
   try
     match find "mappings" toml_data with

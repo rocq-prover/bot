@@ -1040,9 +1040,10 @@ let repository_info_of_resp ~owner ~repo resp =
       ) )
 
 (** Get repository information including owner, default branch, and IDs.
-    Uses GraphQL API with timeout (default 5 seconds).
+    Uses GraphQL API with timeout (defaults to bot_info.api_timeout, or 5.0 seconds).
     Returns Error if repository doesn't exist or has no default branch. *)
-let get_repository_info ~bot_info ~owner ~repo ?(timeout = 5.0) () =
+let get_repository_info ~bot_info ~owner ~repo ?(timeout = bot_info.api_timeout)
+    () =
   let open GitHub_GraphQL.GetRepositoryInfo in
   let query_lwt =
     makeVariables ~owner ~repo ()
@@ -1073,9 +1074,9 @@ let organization_teams_of_resp ~org resp : (team_info list, string) Result.t =
                  {name= team.name; slug= team.slug} ) ) )
 
 (** Get all teams for an organization.
-    Uses GraphQL API with timeout (default 5 seconds).
+    Uses GraphQL API with timeout (defaults to bot_info.api_timeout, or 5.0 seconds).
     Returns empty list if organization has no teams or Error if organization doesn't exist. *)
-let get_organization_teams ~bot_info ~org ?(timeout = 5.0) () :
+let get_organization_teams ~bot_info ~org ?(timeout = bot_info.api_timeout) () :
     (team_info list, string) Result.t Lwt.t =
   let open GitHub_GraphQL.GetOrganizationTeams in
   let query_lwt =
@@ -1111,9 +1112,9 @@ let repository_labels_of_resp ~owner ~repo resp =
             ) ) )
 
 (** Get all labels for a repository.
-    Uses GraphQL API with timeout (default 5 seconds).
+    Uses GraphQL API with timeout (defaults to bot_info.api_timeout, or 5.0 seconds).
     Returns empty list if repository has no labels or Error if repository doesn't exist. *)
-let get_all_labels ~bot_info ~owner ~repo ?(timeout = 5.0) () =
+let get_all_labels ~bot_info ~owner ~repo ?(timeout = bot_info.api_timeout) () =
   let open GitHub_GraphQL.GetRepositoryLabels in
   let query_lwt =
     makeVariables ~owner ~repo ()

@@ -22,6 +22,8 @@ let key = Config.github_private_key ()
 
 let app_id = Config.github_app_id toml_data
 
+let api_timeout = Config.api_timeout toml_data
+
 let bot_info : Bot_components.Bot_info.t =
   { github_pat= github_access_token
   ; github_install_token= None
@@ -29,7 +31,8 @@ let bot_info : Bot_components.Bot_info.t =
   ; github_name= github_bot_name
   ; email= Config.bot_email toml_data
   ; domain= Config.bot_domain toml_data
-  ; app_id }
+  ; app_id
+  ; api_timeout }
 
 let github_mapping, gitlab_mapping = Config.make_mappings_table toml_data
 
