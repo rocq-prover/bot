@@ -254,6 +254,50 @@ doc_stdlib = "single-job"
   | None ->
       Alcotest.fail "Expected jobs config to be present"
 
+let test_installation_id_cache () =
+  let table = create_repo_config_table (Utils.toml_of_string "") in
+  let owner = "test-org" in
+  let repo = "test-repo" in
+  let install_id = 12345 in
+  (* Initially no installation ID *)
+  check (option int) "no installation id initially"
+    (get_installation_id ~owner ~repo table)
+    None ;
+  (* Update from webhook *)
+  update_installation_id ~owner ~repo ~install_id table ;
+  (* Should now have installation ID *)
+  check (option int) "installation_id after update"
+    (get_installation_id ~owner ~repo table)
+    (Some install_id) ;
+  (* Should also update config if it exists*)
+  let config_str =
+    Printf.sprintf {|
+[repositories.test]
+github = "%s/%s"
+|} owner repo
+  in
+  let toml_data = Utils.toml_of_string config_str in
+  let table2 = create_repo_config_table toml_data in
+  update_installation_id ~owner ~repo ~install_id table2 ;
+  match get_repo_config_opt ~owner ~repo table2 with
+  | Some config ->
+      check (option int) "config updated with install id"
+        config.github_installation_id (Some install_id)
+  | None ->
+      Alcotest.fail "Expected config to exist"
+
+let test_installation_id_persistence () =
+  let table = create_repo_config_table (Utils.toml_of_string "") in
+  let owner = "test-org" in
+  let repo = "test-repo" in
+  (* Multiple updates should keep latest *)
+  update_installation_id ~owner ~repo ~install_id:11111 table ;
+  update_installation_id ~owner ~repo ~install_id:22222 table ;
+  update_installation_id ~owner ~repo ~install_id:33333 table ;
+  check (option int) "latest install id"
+    (get_installation_id ~owner ~repo table)
+    (Some 33333)
+
 let () =
   run "Repo_config"
     [ ( "parsing"
@@ -261,4 +305,7 @@ let () =
         ; test_case "full configuration" `Quick test_full_config
         ; test_case "multiple repositories" `Quick test_multiple_repositories
         ; test_case "pipe separated jobs" `Quick test_pipe_separated_jobs ] )
-    ; ("lookup", [test_case "config table" `Quick test_config_table]) ]
+    ; ("lookup", [test_case "config table" `Quick test_config_table])
+    ; ("installation id", [test_case "cache" `Quick test_installation_id_cache])
+    ; ( "persistence"
+      , [test_case "persistence" `Quick test_installation_id_persistence] ) ]

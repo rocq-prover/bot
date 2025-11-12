@@ -287,3 +287,34 @@ let find_repo_with_minimizer repo_config_table =
           Some (config.github_owner, config.github_repo)
       | None ->
           None )
+
+(* Cache for installation IDs detected from webhooks *)
+let installation_id_cache = Hashtbl.create (module String)
+(* "owner/repo" -> install_id *)
+
+(** Update installation ID from webhook *)
+let update_installation_id ~owner ~repo ~install_id repo_config_table =
+  let key = f "%s/%s" owner repo in
+  Hashtbl.set installation_id_cache ~key ~data:install_id ;
+  (* Also update in repo config if exists *)
+  match Hashtbl.find repo_config_table key with
+  | Some config ->
+      let updated_config =
+        {config with github_installation_id= Some install_id}
+      in
+      Hashtbl.set repo_config_table ~key ~data:updated_config
+  | None ->
+      ()
+
+(** Get installation ID (from cache or config) *)
+let get_installation_id ~owner ~repo repo_config_table =
+  let key = f "%s/%s" owner repo in
+  match Hashtbl.find installation_id_cache key with
+  | Some id ->
+      Some id
+  | None -> (
+    match Hashtbl.find repo_config_table key with
+    | Some config ->
+        config.github_installation_id
+    | None ->
+        None )

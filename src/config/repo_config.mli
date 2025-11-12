@@ -60,3 +60,13 @@ val find_repo_with_ci_config :
 
 val find_repo_with_minimizer :
   (string, t) Base.Hashtbl.t -> (string * string) option
+
+val update_installation_id :
+     owner:string
+  -> repo:string
+  -> install_id:int
+  -> (string, t) Base.Hashtbl.t
+  -> unit
+
+val get_installation_id :
+  owner:string -> repo:string -> (string, t) Base.Hashtbl.t -> int option
