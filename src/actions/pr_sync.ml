@@ -71,49 +71,46 @@ let update_pr ?full_ci ?(skip_author_check = false) ~bot_info ~repo_config_table
     (* Remove rebase / stale label *)
     GitHub_automation.remove_labels_if_present ~bot_info pr_info.issue
       [rebase_label; stale_label] ;
-    (* Original: hardcoded check for "rocq-prover"/"rocq" repo
-       Now: check if repo has config (or fallback to hardcoded check) *)
-    (* In the Rocq Prover repo, we want to prevent untrusted contributors from
-       circumventing the fact that the bench job is a manual job by changing
-       the CI configuration. *)
+    (* Refactored to remove hardcoded repository checks
+
+       Before: Had hardcoded check for "rocq-prover"/"rocq" to enable CI protection.
+       Now: Only checks if repo has config with org_name and team_name configured.
+
+       This prevents untrusted contributors from circumventing manual jobs by
+       changing the CI configuration. *)
+    let open Lwt.Infix in
+    (* Check if repo has config (feature enabled) *)
     let* can_trigger_ci =
-      if
-        ( has_repo_config ~owner ~repo repo_config_table
-        || (String.equal owner "rocq-prover" && String.equal repo "rocq") )
-        && not skip_author_check
+      if has_repo_config ~owner ~repo repo_config_table && not skip_author_check
       then
-        let* config_modified =
-          git_test_modified ~base:pr_info.base.sha ~head:pr_info.head.sha
-            ".*gitlab.*\\.yml"
-        in
-        if config_modified then (
-          (* Original: hardcoded org="rocq-prover" and team="contributors"
-             Now: use repo_config.org_name and repo_config.team_name if available,
-             fallback to hardcoded values *)
-          let org, team =
-            match repo_config with
-            | Some config -> (
-              match (config.org_name, config.team_name) with
-              | Some org, Some team ->
-                  (org, team)
-              | _ ->
-                  ("rocq-prover", "contributors") )
-            | None ->
-                ("rocq-prover", "contributors")
-          in
-          Lwt.async (fun () ->
-              Lwt_io.printlf
-                "CI configuration modified in PR %s/%s#%d, checking if %s is a \
-                 member of @%s/%s..."
-                owner repo pr_info.issue.number pr_info.issue.user org team ) ;
-          (* This is an approximation:
-             we are checking who the PR author is and not who is pushing. *)
-          GitHub_queries.get_team_membership ~bot_info ~org ~team
-            ~user:pr_info.issue.user )
-        else Lwt.return_ok true
+        git_test_modified ~base:pr_info.base.sha ~head:pr_info.head.sha
+          ".*gitlab.*\\.yml"
+        >>= function
+        | Ok config_modified when config_modified -> (
+          (* Check team membership to prevent CI file modification by untrusted contributors *)
+          match repo_config with
+          | Some c -> (
+            match (c.org_name, c.team_name) with
+            | Some org, Some team -> (
+                GitHub_queries.get_team_membership ~bot_info ~org ~team
+                  ~user:pr_info.issue.user
+                >>= fun is_member_result ->
+                match is_member_result with
+                | Ok true ->
+                    Lwt.return_ok true (* Is member, can trigger CI *)
+                | Ok false | Error _ ->
+                    Lwt.return_ok
+                      false (* Not member or error, cannot trigger CI *) )
+            | _ ->
+                (* No org/team configured, allow CI changes (can't check membership) *)
+                Lwt.return_ok true )
+          | None ->
+              (* No config, allow CI changes (can't check membership) *)
+              Lwt.return_ok true )
+        | Ok _ | Error _ ->
+            Lwt.return_ok true
       else Lwt.return_ok true
     in
-    let open Lwt.Infix in
     if not can_trigger_ci then (
       (* Since we cannot trigger CI, in particular, we still need to run a full CI *)
       GitHub_automation.add_labels_if_absent ~bot_info pr_info.issue
@@ -126,20 +123,16 @@ let update_pr ?full_ci ?(skip_author_check = false) ~bot_info ~repo_config_table
       >>= Utils.report_on_posting_comment
       >>= fun () -> Lwt.return_ok () )
     else
-      (* Original: hardcoded check for "rocq-prover"/"rocq" repo
-         Now: check if repo has config (or fallback to hardcoded check) *)
-      (* In Rocq Prover repo, we have several special cases:
-         1. if something has changed in dev/ci/docker/, we rebuild the Docker image
+      (* BEFORE: Had hardcoded check for "rocq-prover"/"rocq" to enable CI options *)
+      (* NOW: Only checks if repo has config (feature enabled) *)
+      (* Special CI handling:
+         1. if something has changed in docker path, we rebuild the Docker image
          2. if there was a special label set, we run a full CI
       *)
       let get_options =
-        if
-          has_repo_config ~owner ~repo repo_config_table
-          || (String.equal owner "rocq-prover" && String.equal repo "rocq")
-        then
-          (* Original: hardcoded docker path pattern "dev/ci/docker/.*Dockerfile.*"
-             and CI variables "SKIP_DOCKER", "FULL_CI"
-             Now: use repo_config.ci_config if available, fallback to hardcoded values *)
+        if has_repo_config ~owner ~repo repo_config_table then
+          (* BEFORE: Used hardcoded docker path pattern and CI variable names *)
+          (* NOW: Use repo_config.ci_config if available, fallback to defaults *)
           let docker_path_pattern =
             match repo_config with
             | Some config -> (
@@ -291,9 +284,8 @@ let run_ci_action ~bot_info ~repo_config_table ~comment_info ?full_ci
   let owner = comment_info.issue.issue.owner in
   let repo = comment_info.issue.issue.repo in
   let repo_config = get_repo_config_opt ~owner ~repo repo_config_table in
-  (* Original: hardcoded org="rocq-prover" and team="contributors"
-     Now: use repo_config.org_name and repo_config.team_name if available,
-     fallback to hardcoded values *)
+  (* BEFORE: Had hardcoded org="rocq-prover" and team="contributors" *)
+  (* NOW: Use repo_config.org_name and repo_config.team_name (required for feature) *)
   let org, team =
     match repo_config with
     | Some config -> (
@@ -301,9 +293,11 @@ let run_ci_action ~bot_info ~repo_config_table ~comment_info ?full_ci
       | Some org, Some team ->
           (org, team)
       | _ ->
-          ("rocq-prover", "contributors") )
+          (* No org/team configured - this shouldn't happen if feature is enabled *)
+          failwith
+            "run_ci_action called but org_name or team_name not configured" )
     | None ->
-        ("rocq-prover", "contributors")
+        failwith "run_ci_action called but no repo config found"
   in
   (fun () ->
     (let open Lwt_result.Infix in
@@ -349,15 +343,13 @@ let pull_request_updated_action ~bot_info ~repo_config_table
   let owner = pr_info.issue.issue.owner in
   let repo = pr_info.issue.issue.repo in
   let repo_url = f "https://github.com/%s/%s" owner repo in
-  (* Original: hardcoded check for "https://github.com/rocq-prover/rocq"
-     Now: check if repo has config (or fallback to hardcoded check) *)
+  (* BEFORE: Had hardcoded check for "rocq-prover"/"rocq" *)
+  (* NOW: Only checks if repo has config (feature enabled) *)
   ( match (action, pr_info.base.branch.repo_url) with
   | PullRequestOpened, url
     when String.equal url repo_url
          && String.equal pr_info.base.branch.name pr_info.head.branch.name
-         && ( has_repo_config ~owner ~repo repo_config_table
-            || (String.equal owner "rocq-prover" && String.equal repo "rocq") )
-    ->
+         && has_repo_config ~owner ~repo repo_config_table ->
       (fun () ->
         GitHub_mutations.post_comment ~bot_info ~id:pr_info.issue.id
           ~message:
