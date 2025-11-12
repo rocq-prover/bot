@@ -622,3 +622,60 @@ module UpdateCheckRun =
     }
   }
 |}]
+
+(* Query to get repository information including owner details. owner is a union
+   type (Organization | User), so we need inline fragments to handle both cases.
+*)
+module GetRepositoryInfo =
+  [%graphql
+  {|
+query getRepoInfo($owner: String!, $repo: String!) {
+  repository(owner: $owner, name: $repo) {
+    id
+    owner {
+      ... on Organization {
+        login
+        name
+      }
+      ... on User {
+        login
+      }
+    }
+    defaultBranchRef {
+      name
+    }
+  }
+}
+|}]
+
+(* Query to get organization teams *)
+module GetOrganizationTeams =
+  [%graphql
+  {|
+  query getOrgTeams($org: String!, $first: Int = 100) {
+    organization(login: $org) {
+      teams(first: $first) {
+        nodes {
+          name
+          slug
+        }
+      }
+    }
+  }
+|}]
+
+(* Query to get all repository labels *)
+module GetRepositoryLabels =
+  [%graphql
+  {|
+  query getRepoLabels($owner: String!, $repo: String!, $first: Int = 100) {
+    repository(owner: $owner, name: $repo) {
+      labels(first: $first) {
+        nodes {
+          id
+          name
+        }
+      }
+    }
+  }
+|}]
