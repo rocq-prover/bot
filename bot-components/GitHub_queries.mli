@@ -159,3 +159,29 @@ val get_artifact_blob :
   -> repo:string
   -> artifact_id:string
   -> ((string * string) list, string) result Lwt.t
+
+(* Get repository info with timeout (default 5 seconds) *)
+val get_repository_info :
+     bot_info:Bot_info.t
+  -> owner:string
+  -> repo:string
+  -> ?timeout:float
+  -> unit
+  -> (repository_info, string) result Lwt.t
+
+(* Get organization teams with timeout *)
+val get_organization_teams :
+     bot_info:Bot_info.t
+  -> org:string
+  -> ?timeout:float
+  -> unit
+  -> (team_info list, string) result Lwt.t
+
+(* Get all repository labels with timeout *)
+val get_all_labels :
+     bot_info:Bot_info.t
+  -> owner:string
+  -> repo:string
+  -> ?timeout:float
+  -> unit
+  -> (label_info list, string) result Lwt.t

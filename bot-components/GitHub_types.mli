@@ -1,5 +1,13 @@
 type repository_info =
-  {id: int; node_id: GitHub_ID.t; owner: string; name: string}
+  { id: int
+  ; node_id: GitHub_ID.t
+  ; owner: string
+  ; name: string
+  ; default_branch: string }
+
+type team_info = {name: string; slug: string}
+
+type label_info = {node_id: GitHub_ID.t; name: string}
 
 type milestone = {milestone_title: string; description: string option}
 
