@@ -1002,3 +1002,134 @@ let get_artifact_blob ~bot_info ~owner ~repo ~artifact_id =
     (f "repos/%s/%s/actions/artifacts/%s/zip" owner repo artifact_id)
     (let open Zip in
      List.map ~f:(fun (entry, contents) -> (entry.filename, contents)) )
+
+let with_timeout ~timeout operation =
+  Lwt.pick
+    [ operation
+    ; ( Lwt_unix.sleep timeout
+      >>= fun () ->
+      Lwt.fail (Failure (f "Operation timed out after %.1f seconds" timeout)) )
+    ]
+
+(** Parse GraphQL response into repository_info type.
+    Handles both Organization and User owner types, extracting login from either. *)
+let repository_info_of_resp ~owner ~repo resp =
+  let open GitHub_GraphQL.GetRepositoryInfo in
+  match resp.repository with
+  | None ->
+      Error (f "Repository %s/%s does not exist." owner repo)
+  | Some repository -> (
+    match repository.defaultBranchRef with
+    | None ->
+        Error (f "Repository %s/%s has no default branch." owner repo)
+    | Some branch -> (
+      match repository.databaseId with
+      | None ->
+          Error (f "Repository %s/%s has no database ID." owner repo)
+      | Some db_id -> (
+        (* owner is a union type (Organization | User), extract login from either *)
+        match repository.owner with
+        | `Organization org ->
+            Ok
+              { id= db_id
+              ; node_id= GitHub_ID.of_string repository.id
+              ; owner= org.login
+              ; name= repository.name
+              ; default_branch= branch.name }
+        | `User user ->
+            Ok
+              { id= db_id
+              ; node_id= GitHub_ID.of_string repository.id
+              ; owner= user.login
+              ; name= repository.name
+              ; default_branch= branch.name }
+        | `UnspecifiedFragment _ ->
+            Error (f "Repository %s/%s owner type not recognized." owner repo) )
+      ) )
+
+(** Get repository information including owner, default branch, and IDs.
+    Uses GraphQL API with timeout (default 5 seconds).
+    Returns Error if repository doesn't exist or has no default branch. *)
+let get_repository_info ~bot_info ~owner ~repo ?(timeout = 5.0) () =
+  let open GitHub_GraphQL.GetRepositoryInfo in
+  let query_lwt =
+    makeVariables ~owner ~repo ()
+    |> serializeVariables |> variablesToJson
+    |> send_graphql_query ~bot_info ~query
+         ~parse:(Fn.compose parse unsafe_fromJson)
+  in
+  with_timeout ~timeout query_lwt
+  >|= Result.map_error ~f:(fun err ->
+          f "Query get_repository_info failed with %s" err )
+  >|= Result.bind ~f:(repository_info_of_resp ~owner ~repo)
+
+(** Parse GraphQL response into list of team_info.
+    Returns empty list if organization has no teams. *)
+let organization_teams_of_resp ~org resp : (team_info list, string) Result.t =
+  let open GitHub_GraphQL.GetOrganizationTeams in
+  match resp.organization with
+  | None ->
+      Error (f "Organization %s does not exist." org)
+  | Some organization -> (
+    match organization.teams.nodes with
+    | None ->
+        Ok []
+    | Some teams ->
+        Ok
+          ( teams |> Array.to_list |> List.filter_opt
+          |> List.map ~f:(fun team : team_info ->
+                 {name= team.name; slug= team.slug} ) ) )
+
+(** Get all teams for an organization.
+    Uses GraphQL API with timeout (default 5 seconds).
+    Returns empty list if organization has no teams or Error if organization doesn't exist. *)
+let get_organization_teams ~bot_info ~org ?(timeout = 5.0) () :
+    (team_info list, string) Result.t Lwt.t =
+  let open GitHub_GraphQL.GetOrganizationTeams in
+  let query_lwt =
+    makeVariables ~org () |> serializeVariables |> variablesToJson
+    |> send_graphql_query ~bot_info ~query
+         ~parse:(Fn.compose parse unsafe_fromJson)
+  in
+  with_timeout ~timeout query_lwt
+  >|= Result.map_error ~f:(fun err ->
+          f "Query get_organization_teams failed with %s" err )
+  >|= Result.bind ~f:(organization_teams_of_resp ~org)
+
+(** Parse GraphQL response into list of label_info.
+    Returns empty list if repository has no labels. *)
+let repository_labels_of_resp ~owner ~repo resp =
+  let open GitHub_GraphQL.GetRepositoryLabels in
+  match resp.repository with
+  | None ->
+      Error (f "Repository %s/%s does not exist." owner repo)
+  | Some repository -> (
+    match repository.labels with
+    | None ->
+        Ok []
+    | Some labels_conn -> (
+      match labels_conn.nodes with
+      | None ->
+          Ok []
+      | Some labels ->
+          Ok
+            ( labels |> Array.to_list |> List.filter_opt
+            |> List.map ~f:(fun label ->
+                   {node_id= GitHub_ID.of_string label.id; name= label.name} )
+            ) ) )
+
+(** Get all labels for a repository.
+    Uses GraphQL API with timeout (default 5 seconds).
+    Returns empty list if repository has no labels or Error if repository doesn't exist. *)
+let get_all_labels ~bot_info ~owner ~repo ?(timeout = 5.0) () =
+  let open GitHub_GraphQL.GetRepositoryLabels in
+  let query_lwt =
+    makeVariables ~owner ~repo ()
+    |> serializeVariables |> variablesToJson
+    |> send_graphql_query ~bot_info ~query
+         ~parse:(Fn.compose parse unsafe_fromJson)
+  in
+  with_timeout ~timeout query_lwt
+  >|= Result.map_error ~f:(fun err ->
+          f "Query get_all_labels failed with %s" err )
+  >|= Result.bind ~f:(repository_labels_of_resp ~owner ~repo)

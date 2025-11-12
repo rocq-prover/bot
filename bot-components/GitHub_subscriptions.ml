@@ -81,7 +81,8 @@ let repository_info_of_json json =
   { id= repo |> member "id" |> to_int
   ; node_id= repo |> member "node_id" |> GitHub_ID.of_json
   ; owner= repo |> member "owner" |> member "login" |> to_string
-  ; name= repo |> member "name" |> to_string }
+  ; name= repo |> member "name" |> to_string
+  ; default_branch= repo |> member "default_branch" |> to_string }
 
 let check_suite_info_of_json json =
   let check_suite = json |> member "check_suite" in

@@ -629,23 +629,25 @@ module UpdateCheckRun =
 module GetRepositoryInfo =
   [%graphql
   {|
-query getRepoInfo($owner: String!, $repo: String!) {
-  repository(owner: $owner, name: $repo) {
-    id
-    owner {
-      ... on Organization {
-        login
+  query getRepoInfo($owner: String!, $repo: String!) {
+    repository(owner: $owner, name: $repo) {
+      id
+      databaseId
+      name
+      owner {
+        ... on Organization {
+          login
+          name
+        }
+        ... on User {
+          login
+        }
+      }
+      defaultBranchRef {
         name
       }
-      ... on User {
-        login
-      }
-    }
-    defaultBranchRef {
-      name
     }
   }
-}
 |}]
 
 (* Query to get organization teams *)
