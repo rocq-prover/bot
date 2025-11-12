@@ -17,13 +17,13 @@ let handle_stale_pr_check ~bot_info ~key ~app_id ~repo_config_table
         (fun () ->
           Bot_components.Github_installations.action_as_github_app ~bot_info
             ~key ~app_id ~owner (fun ~bot_info ->
-              Pr_sync.rocq_check_needs_rebase_pr ~bot_info ~repo_config_table
-                ~owner ~repo ~warn_after ~close_after ~throttle:6 )
+              Pr_sync.check_needs_rebase_pr ~bot_info ~repo_config_table ~owner
+                ~repo ~warn_after ~close_after ~throttle:6 )
           >>= fun () ->
           Bot_components.Github_installations.action_as_github_app ~bot_info
             ~key ~app_id ~owner (fun ~bot_info ->
-              Pr_sync.rocq_check_stale_pr ~bot_info ~repo_config_table ~owner
-                ~repo ~after:close_after ~throttle:4 ) )
+              Pr_sync.check_stale_pr ~bot_info ~repo_config_table ~owner ~repo
+                ~after:close_after ~throttle:4 ) )
         |> Lwt.async ;
         Server.respond_string ~status:`OK ~body:"Stale pull requests updated" ()
         )

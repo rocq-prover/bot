@@ -253,8 +253,8 @@ let handle_github_webhook ~bot_info ~key ~app_id ~github_bot_name
                 Bot_components.Github_installations
                 .action_as_github_app_from_install_id ~bot_info ~key ~app_id
                   ~install_id (fun ~bot_info ->
-                    Backport.rocq_push_action ~bot_info ~repo_config_table
-                      ~owner ~repo ~base_ref ~commits_msg )
+                    Backport.push_action ~bot_info ~repo_config_table ~owner
+                      ~repo ~base_ref ~commits_msg )
               else Lwt.return_unit
             in
             (* Mirror action: syncs GitHub push to GitLab (unchanged logic) *)
