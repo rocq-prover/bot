@@ -42,6 +42,7 @@ doc_refman = "doc:refman|doc:ci-refman"
 doc_init = "doc:init"
 doc_stdlib = "doc:stdlib|doc:stdlib:dune"
 doc_ml_api = "doc:ml-api:odoc"
+custom_job_status = true
 
 [repositories.rocq.documentation]
 refman_path = "_build/default/doc/refman-html/index.html"
