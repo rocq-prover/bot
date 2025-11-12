@@ -284,14 +284,23 @@ let handle_github_webhook ~bot_info ~key ~app_id ~github_bot_name
   | Ok
       (Some install_id, PushEvent {owner; repo; base_ref; head_sha; commits_msg})
     -> (
-      (* Original: hardcoded pattern for "rocq-prover"/"rocq"
-         Now: check if repo has config (or fallback to hardcoded check) *)
-      let is_rocq =
-        String.equal owner "rocq-prover" && String.equal repo "rocq"
-      in
+      (* Refactored to remove hardcoded repository checks
+
+         Before: Had special case for "rocq-prover"/"rocq" that always ran backport + mirror.
+         Now: Uses config-based logic - runs backport + mirror only if repo has gitlab_domain
+         configured. Backport also requires github_project_number to be set. *)
+
+      (* NEW: Update installation ID cache from webhook event *)
+      (* This enables auto-detection to cache installation IDs without explicit config *)
+      Repo_config.update_installation_id ~owner ~repo ~install_id
+        repo_config_table ;
+      (* Check if repo has config with GitLab domain configured *)
+      (* BEFORE: Also checked hardcoded `is_rocq` condition *)
+      (* NOW: Only checks config, no hardcoded repository names *)
       match get_repo_config_opt ~owner ~repo repo_config_table with
-      | Some config when is_rocq || Option.is_some config.gitlab_domain ->
-          (* Use config if available *)
+      | Some config when Option.is_some config.gitlab_domain ->
+          (* BEFORE: Used hardcoded "gitlab.inria.fr"/"coq"/"coq" as fallback for rocq-prover/rocq *)
+          (* NOW: Uses config values, falls back to "gitlab.com"/owner/repo (generic default) *)
           let gitlab_domain, gl_owner, gl_repo =
             match
               (config.gitlab_domain, config.gitlab_owner, config.gitlab_repo)
@@ -299,52 +308,41 @@ let handle_github_webhook ~bot_info ~key ~app_id ~github_bot_name
             | Some domain, Some gl_owner, Some gl_repo ->
                 (domain, gl_owner, gl_repo)
             | _ ->
-                ("gitlab.inria.fr", "coq", "coq")
+                (* Generic fallback: use default GitLab domain and same owner/repo as GitHub *)
+                ("gitlab.com", owner, repo)
           in
           (fun () ->
             init_git_bare_repository ~bot_info
             >>= fun () ->
-            Bot_components.Github_installations
-            .action_as_github_app_from_install_id ~bot_info ~key ~app_id
-              ~install_id (fun ~bot_info ->
-                Backport.rocq_push_action ~bot_info ~repo_config_table ~owner
-                  ~repo ~base_ref ~commits_msg )
-            <&> Bot_components.Github_installations
+            (* BEFORE: Always ran backport action for rocq-prover/rocq *)
+            (* NOW: Only runs backport if github_project_number is configured *)
+            let backport_action =
+              if Option.is_some config.github_project_number then
+                Bot_components.Github_installations
                 .action_as_github_app_from_install_id ~bot_info ~key ~app_id
-                  ~install_id
-                  (mirror_action ~gitlab_domain ~gh_owner:owner ~gh_repo:repo
-                     ~gl_owner ~gl_repo ~base_ref ~head_sha () ) )
+                  ~install_id (fun ~bot_info ->
+                    Backport.rocq_push_action ~bot_info ~repo_config_table
+                      ~owner ~repo ~base_ref ~commits_msg )
+              else Lwt.return_unit
+            in
+            (* Mirror action: syncs GitHub push to GitLab (unchanged logic) *)
+            let mirror_action =
+              Bot_components.Github_installations
+              .action_as_github_app_from_install_id ~bot_info ~key ~app_id
+                ~install_id
+                (mirror_action ~gitlab_domain ~gh_owner:owner ~gh_repo:repo
+                   ~gl_owner ~gl_repo ~base_ref ~head_sha () )
+            in
+            (* Run both actions in parallel (unchanged) *)
+            backport_action <&> mirror_action )
           |> Lwt.async ;
           Server.respond_string ~status:`OK
-            ~body:
-              "Processing push event on the Rocq Prover repository: analyzing \
-               merge / backporting info."
+            ~body:(f "Processing push event for %s/%s." owner repo)
             ()
-      | None when is_rocq ->
-          (* Fallback to hardcoded rocq-prover/rocq logic *)
-          let gitlab_domain, gl_owner, gl_repo =
-            ("gitlab.inria.fr", "coq", "coq")
-          in
-          (fun () ->
-            init_git_bare_repository ~bot_info
-            >>= fun () ->
-            Bot_components.Github_installations
-            .action_as_github_app_from_install_id ~bot_info ~key ~app_id
-              ~install_id (fun ~bot_info ->
-                Backport.rocq_push_action ~bot_info ~repo_config_table ~owner
-                  ~repo ~base_ref ~commits_msg )
-            <&> Bot_components.Github_installations
-                .action_as_github_app_from_install_id ~bot_info ~key ~app_id
-                  ~install_id
-                  (mirror_action ~gitlab_domain ~gh_owner:owner ~gh_repo:repo
-                     ~gl_owner ~gl_repo ~base_ref ~head_sha () ) )
-          |> Lwt.async ;
-          Server.respond_string ~status:`OK
-            ~body:
-              "Processing push event on the Rocq Prover repository: analyzing \
-               merge / backporting info."
-            ()
-      | _ ->
+      | Some _ | None ->
+          (* BEFORE: Had special case for rocq-prover/rocq even without config *)
+          (* NOW: All repos without config go to handle_push_event_for_repos *)
+          (* This function has its own fallback logic for backward compatibility *)
           handle_push_event_for_repos ~bot_info ~key ~app_id ~install_id
             ~repo_config_table ~owner ~repo ~base_ref ~head_sha )
   | Ok (_, PullRequestUpdated (PullRequestClosed, pr_info)) ->
