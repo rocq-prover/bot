@@ -27,16 +27,20 @@ let job_action ~bot_info ~repo_config_table
       let repo_config =
         get_repo_config_opt ~owner:gh_owner ~repo:gh_repo repo_config_table
       in
-      (* Original: hardcoded check for "rocq-prover/rocq", "bench"
-         Now: use repo_config.jobs.bench if available, fallback to hardcoded check *)
+      (* Refactored to remove hardcoded repository checks
+
+         Before: Had hardcoded check for "rocq-prover/rocq" with "bench" job name.
+         Now: Only checks if repo has config with jobs.bench configured. *)
+
+      (* Check if this is a bench job based on config *)
       let is_bench_job =
         match repo_config with
         | Some config -> (
           match config.jobs with
           | Some jobs -> (
             match jobs.bench with
-            | Some bench_job_name ->
-                String.equal job_info.build_name bench_job_name
+            | Some bench_name ->
+                String.equal job_info.build_name bench_name
             | None ->
                 false )
           | None ->
@@ -44,41 +48,23 @@ let job_action ~bot_info ~repo_config_table
         | None ->
             false
       in
-      let is_rocq_bench =
-        String.equal github_repo_full_name "rocq-prover/rocq"
-        && String.equal job_info.build_name "bench"
-      in
-      if is_bench_job || is_rocq_bench then
+      if is_bench_job then
         Bench.update_bench_status ~bot_info ~repo_config_table ~job_info
           (gh_owner, gh_repo) ~external_id ~number:pr_num
       else
         match job_info.build_status with
         | "failed" ->
             let failure_reason = Option.value_exn job_info.failure_reason in
-            (* Original: hardcoded check for "rocq-prover/rocq" for rocq-specific handling
-               Now: use repo_config if available, fallback to hardcoded check *)
-            let is_rocq_repo =
-              match repo_config with
-              | Some config ->
-                  String.equal config.github_owner "rocq-prover"
-                  && String.equal config.github_repo "rocq"
-              | None ->
-                  String.equal github_repo_full_name "rocq-prover/rocq"
-            in
+            (* BEFORE: Had hardcoded check for "rocq-prover/rocq" to use
+               rocq-specific handlers *)
+            (* NOW: Use generic handlers for all repos (config-based custom
+               handlers can be added later) *)
             let summary_builder, allow_failure_handler =
-              if is_rocq_repo then
-                ( Job_status_rocq.rocq_summary_builder
-                , fun ~bot_info ~job_name ~job_url ~pr_num ~head_commit
-                      (gh_owner, gh_repo) ~gitlab_repo_full_name ->
-                    Job_status_rocq.handle_rocq_allow_failure ~bot_info
-                      ~job_name ~job_url ~pr_num ~head_commit
-                      (gh_owner, gh_repo) ~gitlab_repo_full_name )
-              else
-                ( (fun _trace_lines trace_description ->
-                    Lwt.return trace_description )
-                , fun ~bot_info:_ ~job_name:_ ~job_url:_ ~pr_num:_
-                      ~head_commit:_ _ ~gitlab_repo_full_name:_ ->
-                    Lwt.return_unit )
+              ( (fun _trace_lines trace_description ->
+                  Lwt.return trace_description )
+              , fun ~bot_info:_ ~job_name:_ ~job_url:_ ~pr_num:_ ~head_commit:_
+                    _ ~gitlab_repo_full_name:_ ->
+                  Lwt.return_unit )
             in
             Job_status.job_failure ~bot_info job_info ~pr_num
               (gh_owner, gh_repo) ~github_repo_full_name ~gitlab_domain
