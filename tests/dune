@@ -22,3 +22,8 @@
  (name default_config_test)
  (libraries base bot-components config alcotest utils)
  (modules default_config_test))
+
+(test
+ (name cache_test)
+ (libraries base bot-components config alcotest utils)
+ (modules repo_config_test_helpers cache_test))
