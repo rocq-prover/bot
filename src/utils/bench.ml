@@ -167,8 +167,8 @@ let update_bench_status ~bot_info ~repo_config_table ~job_info
           let repo_config =
             get_repo_config_opt ~owner:gh_owner ~repo:gh_repo repo_config_table
           in
-          (* Original: hardcoded GitLab URL "https://gitlab.inria.fr/coq/coq/-/jobs/%d"
-             Now: use repo_config if available, fallback to hardcoded value *)
+          (* BEFORE: Had hardcoded fallback to "gitlab.inria.fr/coq/coq" *)
+          (* NOW: Use repo_config's gitlab_domain, gitlab_owner, gitlab_repo *)
           let gitlab_url =
             match repo_config with
             | Some config -> (
@@ -179,10 +179,21 @@ let update_bench_status ~bot_info ~repo_config_table ~job_info
                   f "https://%s/%s/%s/-/jobs/%d" domain gl_owner gl_repo
                     job_info.build_id
               | _ ->
-                  f "https://gitlab.inria.fr/coq/coq/-/jobs/%d"
+                  (* Use defaults if not configured *)
+                  let domain =
+                    Option.value ~default:"gitlab.com" config.gitlab_domain
+                  in
+                  let gl_owner =
+                    Option.value ~default:config.github_owner
+                      config.gitlab_owner
+                  in
+                  let gl_repo =
+                    Option.value ~default:config.github_repo config.gitlab_repo
+                  in
+                  f "https://%s/%s/%s/-/jobs/%d" domain gl_owner gl_repo
                     job_info.build_id )
             | None ->
-                f "https://gitlab.inria.fr/coq/coq/-/jobs/%d" job_info.build_id
+                failwith "update_bench_status called without repo_config"
           in
           Lwt_io.printl "Pushing status check for bench job."
           <&>
@@ -257,32 +268,20 @@ let run_bench ~bot_info ~repo_config_table ?key_value_pairs comment_info =
   let repo = pr.issue.repo in
   let pr_number = pr.number in
   let repo_config = get_repo_config_opt ~owner ~repo repo_config_table in
-  (* Original: hardcoded org="rocq-prover", team="contributors", gitlab_domain="gitlab.inria.fr"
-     Now: use repo_config if available, fallback to hardcoded values *)
-  let org =
+  (* BEFORE: Had hardcoded org="rocq-prover", team="contributors", gitlab_domain="gitlab.inria.fr" *)
+  (* NOW: Use repo_config (required for this feature) *)
+  let org, team, gitlab_domain =
     match repo_config with
     | Some config -> (
-      match config.org_name with Some org -> org | None -> "rocq-prover" )
+      match (config.org_name, config.team_name, config.gitlab_domain) with
+      | Some org, Some team, Some domain ->
+          (org, team, domain)
+      | _ ->
+          failwith
+            "run_bench called but org_name, team_name, or gitlab_domain not \
+             configured" )
     | None ->
-        "rocq-prover"
-  in
-  let team =
-    match repo_config with
-    | Some config -> (
-      match config.team_name with Some team -> team | None -> "contributors" )
-    | None ->
-        "contributors"
-  in
-  let gitlab_domain =
-    match repo_config with
-    | Some config -> (
-      match config.gitlab_domain with
-      | Some domain ->
-          domain
-      | None ->
-          "gitlab.inria.fr" )
-    | None ->
-        "gitlab.inria.fr"
+        failwith "run_bench called but no repo config found"
   in
   (* We need the GitLab build_id and project_id. Currently there is no good way
      to query this data so we have to jump through some somewhat useless hoops in
@@ -308,8 +307,8 @@ let run_bench ~bot_info ~repo_config_table ?key_value_pairs comment_info =
         Lwt.return_error err
     | Ok summary -> (
       try
-        (* Original: hardcoded GitLab URL "https://gitlab.inria.fr/coq/coq/-/jobs/"
-           Now: use repo_config if available, fallback to hardcoded value *)
+        (* BEFORE: Had hardcoded fallback to "gitlab.inria.fr/coq/coq" *)
+        (* NOW: Use repo_config's gitlab_domain, gitlab_owner, gitlab_repo *)
         let gitlab_url_prefix =
           match repo_config with
           | Some config -> (
@@ -319,9 +318,19 @@ let run_bench ~bot_info ~repo_config_table ?key_value_pairs comment_info =
             | Some domain, Some gl_owner, Some gl_repo ->
                 f "https://%s/%s/%s/-/jobs/" domain gl_owner gl_repo
             | _ ->
-                "https://gitlab.inria.fr/coq/coq/-/jobs/" )
+                (* Use defaults if not configured *)
+                let domain =
+                  Option.value ~default:"gitlab.com" config.gitlab_domain
+                in
+                let gl_owner =
+                  Option.value ~default:config.github_owner config.gitlab_owner
+                in
+                let gl_repo =
+                  Option.value ~default:config.github_repo config.gitlab_repo
+                in
+                f "https://%s/%s/%s/-/jobs/" domain gl_owner gl_repo )
           | None ->
-              "https://gitlab.inria.fr/coq/coq/-/jobs/"
+              failwith "run_bench called without repo_config"
         in
         let build_id =
           let regexp =

@@ -167,6 +167,8 @@ let trace_action ~repo_full_name trace =
        || test "fatal: [Cc]ouldn't find remote ref refs/heads/pr-"
      then Ignore "Normal failure: pull request was closed."
      else if
+       (* NOTE: This is a specific error handling case for Docker image errors.
+          Could be made config-based in the future if needed. *)
        String.equal repo_full_name "coq/coq"
        && test "Error response from daemon: manifest for .* not found"
      then Ignore "Docker image not found. Do not report anything specific."

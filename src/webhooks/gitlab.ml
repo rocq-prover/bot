@@ -38,18 +38,10 @@ let handle_gitlab_webhook ~bot_info ~key ~app_id ~gitlab_mapping
         (fun () ->
           Bot_components.Github_installations.action_as_github_app ~bot_info
             ~key ~app_id ~owner (fun ~bot_info ->
-              (* Original: hardcoded "rocq-prover", "rocq" for full_ci_check_repo and auto_minimize_on_failure
-                 Now: use repo_config if available, fallback to hardcoded values *)
-              let full_ci_repo =
-                Option.first_some
-                  (find_repo_with_ci_config repo_config_table)
-                  (Some ("rocq-prover", "rocq"))
-              in
-              let minimizer_repo =
-                Option.first_some
-                  (find_repo_with_minimizer repo_config_table)
-                  (Some ("rocq-prover", "rocq"))
-              in
+              (* BEFORE: Had hardcoded fallback to "rocq-prover"/"rocq" *)
+              (* NOW: Use repo_config functions (returns None if not found) *)
+              let full_ci_repo = find_repo_with_ci_config repo_config_table in
+              let minimizer_repo = find_repo_with_minimizer repo_config_table in
               pipeline_action ~bot_info ~repo_config_table pipeline_info
                 ~gitlab_mapping ~full_ci_check_repo:full_ci_repo
                 ~auto_minimize_on_failure:minimizer_repo () ) )
