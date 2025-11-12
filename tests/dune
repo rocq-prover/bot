@@ -17,3 +17,8 @@
  (name repo_config_integration_test)
  (libraries base bot-components config alcotest)
  (modules repo_config_test_helpers repo_config_integration_test))
+
+(test
+ (name default_config_test)
+ (libraries base bot-components config alcotest utils)
+ (modules default_config_test))
