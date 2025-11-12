@@ -17,7 +17,8 @@ type job_config =
   ; doc_refman: string list option (* Pipe-separated string: "job1|job2" *)
   ; doc_init: string option
   ; doc_stdlib: string list option (* Pipe-separated string: "job1|job2" *)
-  ; doc_ml_api: string option }
+  ; doc_ml_api: string option
+  ; custom_job_status: bool option (* Enable custom job status handling *) }
 
 type doc_config =
   { refman_path: string option
