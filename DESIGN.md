@@ -111,14 +111,14 @@ graph TD
 2. **Get Explicit Config from TOML**: Look up `repo_config_table` to find explicit configuration entry for this repository.
 
 3. **Explicit Config Complete?**: Check if required fields (`gitlab_domain`, `org_name`) are present.
-   - **Yes** → Skip auto-detection (use explicit config)
-   - **No** → Proceed to auto-detection
+   - **Yes** -> Skip auto-detection (use explicit config)
+   - **No** -> Proceed to auto-detection
 
 4. **Check Cache** (if explicit config incomplete): Query in-memory cache for previous auto-detection result for this repository.
 
 5. **Cached?**: Check if valid cached result exists (< 1 hour old).
-   - **Yes** → **Use Cached Config**: Return cached auto-detection result immediately, avoiding API calls. This improves performance and reduces rate limit usage.
-   - **No** → **Run API Auto-Detection**: Make GitHub/GitLab API calls to detect missing values.
+   - **Yes** -> **Use Cached Config**: Return cached auto-detection result immediately, avoiding API calls. This improves performance and reduces rate limit usage.
+   - **No** -> **Run API Auto-Detection**: Make GitHub/GitLab API calls to detect missing values.
 
 6. **Run API Auto-Detection** (if not cached):
    - **Detect GitLab Domain**: Search all configured GitLab instances for matching project
