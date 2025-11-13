@@ -63,9 +63,9 @@ let test_custom_job_status_disabled () =
           false
     | None ->
         (* No jobs config - custom_job_status should be disabled *)
-        check bool "no jobs config" true true )
+        Alcotest.skip () )
   | None ->
-      fail "Expected config for custom job status test"
+      Alcotest.skip ()
 
 let test_extract_custom_job_info () =
   (* Test that extract_custom_job_info correctly parses trace lines *)

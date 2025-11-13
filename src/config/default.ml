@@ -15,9 +15,7 @@ let ci_config =
   ; skip_docker_variable= Some "SKIP_DOCKER"
   ; docker_path_pattern= Some ".*Dockerfile.*" }
 
-(** Get minimizer URL from environment variable if set, otherwise None.
-    This allows setting a global default via BOT_MINIMIZER_URL environment variable
-    while keeping the code generic (no hardcoded repository-specific URLs). *)
+(** Get minimizer URL from BOT_MINIMIZER_URL environment variable if set, otherwise None. *)
 let minimizer_url_from_env () =
   try match Sys.getenv "BOT_MINIMIZER_URL" with "" -> None | url -> Some url
   with Not_found -> None

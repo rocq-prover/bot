@@ -82,10 +82,7 @@
 (test
  (name refactored_code_ci_test)
  (libraries base bot-components config alcotest)
- (modules
-  test_helpers
-  refactored_code_test_helpers
-  refactored_code_ci_test))
+ (modules test_helpers refactored_code_test_helpers refactored_code_ci_test))
 
 (test
  (name refactored_code_documentation_test)
@@ -122,12 +119,14 @@
 (test
  (name job_status_custom_test)
  (libraries base bot-components config alcotest ci lwt lwt.unix)
- (modules
-  test_helpers
-  refactored_code_test_helpers
-  job_status_custom_test))
+ (modules test_helpers refactored_code_test_helpers job_status_custom_test))
 
 (test
  (name generic_bot_demo_test)
  (libraries base bot-components config alcotest utils lwt lwt.unix)
  (modules test_helpers generic_bot_demo_test))
+
+(test
+ (name integration_test)
+ (libraries base bot-components config alcotest lwt lwt.unix unix)
+ (modules test_helpers integration_test))
