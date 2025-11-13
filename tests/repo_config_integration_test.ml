@@ -3,7 +3,7 @@ open Bot_components
 open Config
 open Repo_config
 open Alcotest
-open Repo_config_test_helpers
+open Test_helpers
 
 (* Integration tests for repo_config loading from TOML files *)
 

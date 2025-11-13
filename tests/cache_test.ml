@@ -1,23 +1,6 @@
 open Alcotest
 open Cache
-open Repo_config_test_helpers
-
-(* Helper to create a test config *)
-let create_test_config ~owner ~repo ~gitlab_domain =
-  { Repo_config.github_owner= owner
-  ; github_repo= repo
-  ; gitlab_domain= Some gitlab_domain
-  ; gitlab_owner= Some owner
-  ; gitlab_repo= Some repo
-  ; github_installation_id= None
-  ; github_project_number= None
-  ; org_name= Some owner
-  ; team_name= Some "maintainers"
-  ; minimizer_url= None
-  ; ci_config= None
-  ; labels= None
-  ; jobs= None
-  ; documentation= None }
+open Test_helpers
 
 (* Test basic cache get/set operations *)
 let test_cache_basic_operations () =

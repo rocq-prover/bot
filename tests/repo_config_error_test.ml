@@ -2,7 +2,7 @@ open Base
 open Bot_components
 open Repo_config
 open Alcotest
-open Repo_config_test_helpers
+open Test_helpers
 
 let test_missing_github_field () =
   let toml_str =
