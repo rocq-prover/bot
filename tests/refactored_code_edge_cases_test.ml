@@ -1,7 +1,7 @@
 open Base
 open Repo_config
 open Alcotest
-open Repo_config_test_helpers
+open Test_helpers
 open Refactored_code_test_helpers
 open Bot_components.Utils
 

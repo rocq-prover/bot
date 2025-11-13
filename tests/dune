@@ -13,12 +13,12 @@
 (test
  (name repo_config_test)
  (libraries base bot-components config alcotest)
- (modules repo_config_test_helpers repo_config_test))
+ (modules test_helpers repo_config_test))
 
 (test
  (name repo_config_error_test)
  (libraries base bot-components config alcotest)
- (modules repo_config_test_helpers repo_config_error_test))
+ (modules test_helpers repo_config_error_test))
 
 (test
  (name repo_config_property_test)
@@ -28,7 +28,7 @@
 (test
  (name repo_config_integration_test)
  (libraries base bot-components config alcotest)
- (modules repo_config_test_helpers repo_config_integration_test))
+ (modules test_helpers repo_config_integration_test))
 
 (test
  (name default_config_test)
@@ -38,7 +38,7 @@
 (test
  (name cache_test)
  (libraries base bot-components config alcotest utils)
- (modules repo_config_test_helpers cache_test))
+ (modules test_helpers cache_test))
 
 (test
  (name auto_detection_test)
@@ -59,7 +59,7 @@
  (name refactored_code_generic_test)
  (libraries base bot-components config alcotest utils)
  (modules
-  repo_config_test_helpers
+  test_helpers
   refactored_code_test_helpers
   refactored_code_generic_test))
 
@@ -67,7 +67,7 @@
  (name refactored_code_backport_test)
  (libraries base bot-components config alcotest)
  (modules
-  repo_config_test_helpers
+  test_helpers
   refactored_code_test_helpers
   refactored_code_backport_test))
 
@@ -75,7 +75,7 @@
  (name refactored_code_jobs_test)
  (libraries base bot-components config alcotest)
  (modules
-  repo_config_test_helpers
+  test_helpers
   refactored_code_test_helpers
   refactored_code_jobs_test))
 
@@ -83,7 +83,7 @@
  (name refactored_code_ci_test)
  (libraries base bot-components config alcotest)
  (modules
-  repo_config_test_helpers
+  test_helpers
   refactored_code_test_helpers
   refactored_code_ci_test))
 
@@ -91,7 +91,7 @@
  (name refactored_code_documentation_test)
  (libraries base bot-components config alcotest)
  (modules
-  repo_config_test_helpers
+  test_helpers
   refactored_code_test_helpers
   refactored_code_documentation_test))
 
@@ -99,7 +99,7 @@
  (name refactored_code_gitlab_test)
  (libraries base bot-components config alcotest)
  (modules
-  repo_config_test_helpers
+  test_helpers
   refactored_code_test_helpers
   refactored_code_gitlab_test))
 
@@ -107,7 +107,7 @@
  (name refactored_code_bench_test)
  (libraries base bot-components config alcotest)
  (modules
-  repo_config_test_helpers
+  test_helpers
   refactored_code_test_helpers
   refactored_code_bench_test))
 
@@ -115,7 +115,7 @@
  (name refactored_code_edge_cases_test)
  (libraries base bot-components config alcotest utils)
  (modules
-  repo_config_test_helpers
+  test_helpers
   refactored_code_test_helpers
   refactored_code_edge_cases_test))
 
@@ -123,11 +123,11 @@
  (name job_status_custom_test)
  (libraries base bot-components config alcotest ci lwt lwt.unix)
  (modules
-  repo_config_test_helpers
+  test_helpers
   refactored_code_test_helpers
   job_status_custom_test))
 
 (test
  (name generic_bot_demo_test)
  (libraries base bot-components config alcotest utils lwt lwt.unix)
- (modules repo_config_test_helpers generic_bot_demo_test))
+ (modules test_helpers generic_bot_demo_test))
