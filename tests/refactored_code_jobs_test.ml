@@ -39,8 +39,7 @@ let test_bench_job_detection_disabled () =
     | Some jobs ->
         check (option string) "bench job not configured" jobs.bench None
     | None ->
-        (* No jobs config - bench detection should be disabled *)
-        check bool "no jobs config" true true )
+        () )
   | None ->
       fail "Expected config for bench test"
 

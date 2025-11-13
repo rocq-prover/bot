@@ -57,7 +57,6 @@ let handle_comment_created ~bot_info ~key ~app_id ~github_bot_name
   let owner = comment_info.issue.issue.owner in
   let repo = comment_info.issue.issue.repo in
   let repo_config = get_repo_config_opt ~owner ~repo repo_config_table in
-  (* Get minimizer_url from config - feature is only enabled if configured *)
   let minimizer_url =
     match repo_config with Some config -> config.minimizer_url | None -> None
   in

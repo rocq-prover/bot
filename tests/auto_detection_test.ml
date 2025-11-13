@@ -2,7 +2,8 @@ open Test_helpers
 open Auto_detection
 open Alcotest
 
-(** Test GitLab info detection - should fallback to default domain if not found *)
+(** Test GitLab info detection - should fallback to default domain if not found
+  *)
 let test_auto_detect_gitlab_info () =
   (* Test with real GitLab API if credentials are available, otherwise use mock *)
   let bot_info =
@@ -33,7 +34,7 @@ let test_auto_detect_org_team () =
   match create_real_bot_info () with
   | None ->
       (* Skip test if no credentials - this is expected in CI without secrets *)
-      check bool "test skipped due to no credentials" true true
+      Alcotest.skip ()
   | Some bot_info -> (
       (* Use a real public repository for testing that is known to exist *)
       let owner = "ocaml" in
@@ -66,7 +67,7 @@ let test_auto_detect_from_apis () =
   match create_real_bot_info () with
   | None ->
       (* Skip test if no credentials - this is expected in CI without secrets *)
-      check bool "test skipped due to no credentials" true true
+      Alcotest.skip ()
   | Some bot_info ->
       (* Use a real public repository for testing *)
       let owner = "ocaml" in
@@ -103,7 +104,7 @@ let test_auto_detect_from_apis () =
 let test_auto_detect_from_apis_completeness () =
   match create_real_bot_info () with
   | None ->
-      check bool "test skipped due to no credentials" true true
+      Alcotest.skip ()
   | Some bot_info ->
       let owner = "ocaml" in
       let repo = "opam" in
