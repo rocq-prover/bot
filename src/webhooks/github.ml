@@ -57,32 +57,30 @@ let handle_comment_created ~bot_info ~key ~app_id ~github_bot_name
   let owner = comment_info.issue.issue.owner in
   let repo = comment_info.issue.issue.repo in
   let repo_config = get_repo_config_opt ~owner ~repo repo_config_table in
-  (* Original: hardcoded minimizer URL "https://github.com/rocq-community/run-coq-bug-minimizer/actions"
-     Now: use repo_config.minimizer_url if available, fallback to hardcoded value *)
+  (* Get minimizer_url from config - feature is only enabled if configured *)
   let minimizer_url =
-    match repo_config with
-    | Some config -> (
-      match config.minimizer_url with
-      | Some url ->
-          url
-      | None ->
-          "https://github.com/rocq-community/run-coq-bug-minimizer/actions" )
-    | None ->
-        "https://github.com/rocq-community/run-coq-bug-minimizer/actions"
+    match repo_config with Some config -> config.minimizer_url | None -> None
   in
   match minimize_text_of_body body with
-  | Some (options, script) ->
-      (fun () ->
-        init_git_bare_repository ~bot_info
-        >>= fun () ->
-        Bot_components.Github_installations.action_as_github_app ~bot_info ~key
-          ~app_id ~owner (fun ~bot_info ->
-            Minimization.run_coq_minimizer ~bot_info ~script
-              ~comment_thread_id:comment_info.issue.id
-              ~comment_author:comment_info.author ~owner ~repo ~options
-              ~minimizer_url ) )
-      |> Lwt.async ;
-      Server.respond_string ~status:`OK ~body:"Handling minimization." ()
+  | Some (options, script) -> (
+    match minimizer_url with
+    | Some url ->
+        (* Minimization feature enabled - process the request *)
+        (fun () ->
+          init_git_bare_repository ~bot_info
+          >>= fun () ->
+          Bot_components.Github_installations.action_as_github_app ~bot_info
+            ~key ~app_id ~owner (fun ~bot_info ->
+              Minimization.run_coq_minimizer ~bot_info ~script
+                ~comment_thread_id:comment_info.issue.id
+                ~comment_author:comment_info.author ~owner ~repo ~options
+                ~minimizer_url:url ) )
+        |> Lwt.async ;
+        Server.respond_string ~status:`OK ~body:"Handling minimization." ()
+    | None ->
+        (* Minimization feature not configured for this repo - ignore request *)
+        Server.respond_string ~status:`OK
+          ~body:"Minimization feature not configured for this repository." () )
   | None -> (
     (* Since both ci minimization resumption and ci
        minimization will match the resumption string, and we
@@ -381,22 +379,38 @@ let handle_github_webhook ~bot_info ~key ~app_id ~github_bot_name
       let body =
         body |> trim_comments |> strip_quoted_bot_name ~github_bot_name
       in
+      let owner = issue_info.issue.owner in
+      let repo = issue_info.issue.repo in
+      let repo_config = get_repo_config_opt ~owner ~repo repo_config_table in
+      (* Get minimizer_url from config - feature is only enabled if configured *)
+      let minimizer_url =
+        match repo_config with
+        | Some config ->
+            config.minimizer_url
+        | None ->
+            None
+      in
       match minimize_text_of_body body with
-      | Some (options, script) ->
-          (fun () ->
-            init_git_bare_repository ~bot_info
-            >>= fun () ->
-            Bot_components.Github_installations.action_as_github_app ~bot_info
-              ~key ~app_id ~owner:issue_info.issue.owner (fun ~bot_info ->
-                Minimization.run_coq_minimizer ~bot_info ~script
-                  ~comment_thread_id:issue_info.id
-                  ~comment_author:issue_info.user ~owner:issue_info.issue.owner
-                  ~repo:issue_info.issue.repo ~options
-                  ~minimizer_url:
-                    "https://github.com/rocq-community/run-coq-bug-minimizer/actions" )
-            )
-          |> Lwt.async ;
-          Server.respond_string ~status:`OK ~body:"Handling minimization." ()
+      | Some (options, script) -> (
+        match minimizer_url with
+        | Some url ->
+            (* Minimization feature enabled - process the request *)
+            (fun () ->
+              init_git_bare_repository ~bot_info
+              >>= fun () ->
+              Bot_components.Github_installations.action_as_github_app ~bot_info
+                ~key ~app_id ~owner (fun ~bot_info ->
+                  Minimization.run_coq_minimizer ~bot_info ~script
+                    ~comment_thread_id:issue_info.id
+                    ~comment_author:issue_info.user ~owner ~repo ~options
+                    ~minimizer_url:url ) )
+            |> Lwt.async ;
+            Server.respond_string ~status:`OK ~body:"Handling minimization." ()
+        | None ->
+            (* Minimization feature not configured for this repo - ignore request *)
+            Server.respond_string ~status:`OK
+              ~body:"Minimization feature not configured for this repository."
+              () )
       | None ->
           Server.respond_string ~status:`OK
             ~body:(f "Unhandled new issue: %s" body)

@@ -15,8 +15,12 @@ let ci_config =
   ; skip_docker_variable= Some "SKIP_DOCKER"
   ; docker_path_pattern= Some ".*Dockerfile.*" }
 
-let minimizer_url =
-  "https://github.com/rocq-community/run-coq-bug-minimizer/actions"
+(** Get minimizer URL from environment variable if set, otherwise None.
+    This allows setting a global default via BOT_MINIMIZER_URL environment variable
+    while keeping the code generic (no hardcoded repository-specific URLs). *)
+let minimizer_url_from_env () =
+  try match Sys.getenv "BOT_MINIMIZER_URL" with "" -> None | url -> Some url
+  with Not_found -> None
 
 let get_defaults ~owner ~repo =
   { Repo_config.github_owner= owner
@@ -28,7 +32,7 @@ let get_defaults ~owner ~repo =
   ; github_project_number= None
   ; org_name= Some owner
   ; team_name= Some team_name
-  ; minimizer_url= Some minimizer_url
+  ; minimizer_url= minimizer_url_from_env ()
   ; ci_config= Some ci_config
   ; labels= Some labels
   ; jobs= None

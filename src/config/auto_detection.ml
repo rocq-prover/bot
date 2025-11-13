@@ -160,7 +160,7 @@ let auto_detect_from_apis ~bot_info ~github_owner ~github_repo =
         ; github_project_number= None
         ; org_name
         ; team_name
-        ; minimizer_url= Some Default.minimizer_url
+        ; minimizer_url= Default.minimizer_url_from_env ()
         ; ci_config= Some Default.ci_config
         ; labels
         ; jobs= None (* Skip job detection - require explicit config *)
