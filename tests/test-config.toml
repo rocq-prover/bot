@@ -3,6 +3,7 @@
 [bot]
 name = "testbot"
 email = "testbot@users.noreply.github.com"
+api_timeout = "5.0"
 
 [server]
 domain = "testbot.herokuapp.com"
