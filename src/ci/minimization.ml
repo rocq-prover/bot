@@ -1,11 +1,11 @@
 open Bot_components
+open Git_utils
 open Base
 open Utils
 open Lwt.Infix
 open GitHub_types
 open Cohttp
 open Cohttp_lwt_unix
-open Helpers
 
 type artifact_info =
   | ArtifactInfo of

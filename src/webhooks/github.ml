@@ -4,8 +4,8 @@ open Cohttp_lwt_unix
 open Bot_components
 open Bot_components.GitHub_types
 open Bot_components.GitHub_GitLab_sync
+open Git_utils
 open Bench
-open Helpers
 open String_utils
 open Utils
 open Lwt.Infix

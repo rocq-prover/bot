@@ -1,5 +1,6 @@
 open Base
 open GitHub_types
+open Bot_info
 open Lwt.Infix
 open Lwt.Syntax
 open Utils
@@ -139,3 +140,15 @@ let%expect_test "http_repo_url_parsing_example_from_gitlab_docs" =
     {|
   GitLab domain: "gitlab.example.com"
   GitLab repository full name: "gitlab-org/gitlab-test" |}]
+
+let init_git_bare_repository ~bot_info =
+  let* () = Lwt_io.printl "Initializing repository..." in
+  "git init --bare"
+  |&& f {|git config user.email "%s"|} bot_info.email
+  |&& f {|git config user.name "%s"|} bot_info.github_name
+  |> execute_cmd ~mask:[bot_info.github_pat]
+  >>= function
+  | Ok _ ->
+      Lwt_io.printl "Bare repository initialized."
+  | Error e ->
+      Lwt_io.printlf "Error while initializing bare repository: %s." e
