@@ -8,7 +8,8 @@ let create_bot_info ~github_install_token =
   ; email= "test@example.com"
   ; domain= "test.com"
   ; gitlab_instances= Hashtbl.create (module String)
-  ; app_id= 12345 }
+  ; app_id= 12345
+  ; api_timeout= 5.0 }
 
 let test_uses_github_app_token_when_available () =
   let bot_info =

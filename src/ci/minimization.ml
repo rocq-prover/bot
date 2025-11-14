@@ -1,5 +1,4 @@
 open Bot_components
-open Git_utils
 open Base
 open Utils
 open Bot_components.Git_utils

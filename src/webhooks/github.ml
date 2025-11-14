@@ -4,7 +4,6 @@ open Cohttp_lwt_unix
 open Bot_components
 open Bot_components.GitHub_types
 open Bot_components.GitHub_GitLab_sync
-open Bench_utils
 open String_utils
 open Utils
 open Bot_components.Git_utils
@@ -171,7 +170,7 @@ let handle_comment_created ~bot_info ~key ~app_id ~github_bot_name
               Bot_components.Github_installations.action_as_github_app ~bot_info
                 ~key ~app_id ~owner:comment_info.issue.issue.owner
                 (fun ~bot_info ->
-                  run_bench ~bot_info ~repo_config_table
+                  Bench.run_bench ~bot_info ~repo_config_table
                     ~key_value_pairs:[("coq_native", "yes")]
                     comment_info ) )
             |> Lwt.async ;
@@ -190,7 +189,7 @@ let handle_comment_created ~bot_info ~key ~app_id ~github_bot_name
               Bot_components.Github_installations.action_as_github_app ~bot_info
                 ~key ~app_id ~owner:comment_info.issue.issue.owner
                 (fun ~bot_info ->
-                  run_bench ~bot_info ~repo_config_table comment_info ) )
+                  Bench.run_bench ~bot_info ~repo_config_table comment_info ) )
             |> Lwt.async ;
             Server.respond_string ~status:`OK
               ~body:(f "Received a request to start the bench.")

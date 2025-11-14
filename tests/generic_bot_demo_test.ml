@@ -96,8 +96,7 @@ github = "my-org/my-repo"
   let gitlab_instances = Hashtbl.create (module String) in
   Hashtbl.set gitlab_instances ~key:"gitlab.com" ~data:("test-bot", "test-token") ;
   let bot_info =
-    { Bot_info.github_pat= "test-token"
-    ; github_install_token= None
+    { Bot_info.github_install_token= Some "test-token"
     ; gitlab_instances
     ; github_name= "test-bot"
     ; email= "test-bot@users.noreply.github.com"

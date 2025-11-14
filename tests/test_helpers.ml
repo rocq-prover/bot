@@ -8,8 +8,7 @@ let create_mock_bot_info () =
   let gitlab_instances = Hashtbl.create (module String) in
   Hashtbl.set gitlab_instances ~key:"gitlab.com"
     ~data:("test-name", "test-token") ;
-  { Bot_info.github_pat= "test-token"
-  ; github_install_token= None
+  { Bot_info.github_install_token= None
   ; gitlab_instances
   ; github_name= "test-bot"
   ; email= "test-bot@users.noreply.github.com"
@@ -33,8 +32,7 @@ let create_real_bot_info () =
       | None ->
           () ) ;
       Some
-        { Bot_info.github_pat= token
-        ; github_install_token= None
+        { Bot_info.github_install_token= Some token
         ; gitlab_instances
         ; github_name= "test-bot"
         ; email= "test-bot@users.noreply.github.com"
