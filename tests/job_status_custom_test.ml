@@ -1,10 +1,6 @@
 open Base
-open Repo_config
 open Alcotest
-open Refactored_code_test_helpers
 open Job_status
-
-(** Tests for custom job status handling (merged from job_status_rocq) *)
 
 let custom_job_info_testable =
   let pp fmt info =
@@ -24,48 +20,6 @@ let custom_job_info_testable =
     && String.equal a.opam_variant b.opam_variant
   in
   testable pp equal
-
-let test_custom_job_status_enabled () =
-  (* Test that custom job status handling works when enabled in config *)
-  (* Add custom_job_status flag to config *)
-  let toml_str =
-    {|
-[repositories.test]
-github = "test-org/test-repo"
-
-[repositories.test.jobs]
-custom_job_status = true
-|}
-  in
-  let toml_data = Bot_components.Utils.toml_of_string toml_str in
-  let table = create_repo_config_table toml_data in
-  match get_repo_config_opt ~owner:"test-org" ~repo:"test-repo" table with
-  | Some config -> (
-    match config.jobs with
-    | Some jobs ->
-        check bool "custom_job_status enabled"
-          (Option.value ~default:false jobs.custom_job_status)
-          true
-    | None ->
-        fail "Expected jobs config" )
-  | None ->
-      fail "Expected config for custom job status test"
-
-let test_custom_job_status_disabled () =
-  (* Test that custom job status handling is disabled when not configured *)
-  let table = create_generic_config ~owner:"test-org" ~repo:"test-repo" () in
-  match get_repo_config_opt ~owner:"test-org" ~repo:"test-repo" table with
-  | Some config -> (
-    match config.jobs with
-    | Some jobs ->
-        check bool "custom_job_status disabled"
-          (Option.value ~default:false jobs.custom_job_status)
-          false
-    | None ->
-        (* No jobs config - custom_job_status should be disabled *)
-        Alcotest.skip () )
-  | None ->
-      Alcotest.skip ()
 
 let test_extract_custom_job_info () =
   (* Test that extract_custom_job_info correctly parses trace lines *)
@@ -148,43 +102,9 @@ let test_custom_summary_builder () =
     (String.is_substring summary ~substring:trace_description)
     true
 
-let test_rocq_custom_job_status_still_works () =
-  (* Test that rocq can still use custom job status via config *)
-  let toml_str =
-    {|
-[repositories.rocq]
-github = "rocq-prover/rocq"
-
-[repositories.rocq.jobs]
-custom_job_status = true
-bench = "bench"
-|}
-  in
-  let toml_data = Bot_components.Utils.toml_of_string toml_str in
-  let table = create_repo_config_table toml_data in
-  match get_repo_config_opt ~owner:"rocq-prover" ~repo:"rocq" table with
-  | Some config -> (
-    match config.jobs with
-    | Some jobs ->
-        check bool "rocq custom_job_status enabled"
-          (Option.value ~default:false jobs.custom_job_status)
-          true ;
-        check (option string) "rocq bench job" jobs.bench (Some "bench")
-    | None ->
-        fail "Expected jobs config for rocq" )
-  | None ->
-      fail "Expected rocq config"
-
 let () =
   run "Job Status - Custom Handling"
-    [ ( "config"
-      , [ test_case "custom job status enabled" `Quick
-            test_custom_job_status_enabled
-        ; test_case "custom job status disabled" `Quick
-            test_custom_job_status_disabled
-        ; test_case "rocq custom job status still works" `Quick
-            test_rocq_custom_job_status_still_works ] )
-    ; ( "extraction"
+    [ ( "extraction"
       , [ test_case "extract custom job info" `Quick test_extract_custom_job_info
         ; test_case "extract custom job info missing fields" `Quick
             test_extract_custom_job_info_missing_fields ] )

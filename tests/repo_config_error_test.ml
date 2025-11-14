@@ -97,25 +97,6 @@ name = "testbot"
     "should return empty list when no repositories section" [] configs ;
   check int "should have zero configs" 0 (List.length configs)
 
-let test_repository_with_only_github () =
-  let toml_str =
-    {|
-[repositories.rocq]
-github = "rocq-prover/rocq"
-# All other fields are optional, should parse successfully
-|}
-  in
-  let toml_data = Utils.toml_of_string toml_str in
-  let configs = parse_all_repo_configs toml_data in
-  (* Should parse successfully with only github field *)
-  check int "should have one config" 1 (List.length configs) ;
-  let config = List.hd_exn configs in
-  check string "github_owner" config.github_owner "rocq-prover" ;
-  check string "github_repo" config.github_repo "rocq" ;
-  check (option int) "installation_id should be None"
-    config.github_installation_id None ;
-  check (option string) "gitlab_domain should be None" config.gitlab_domain None
-
 let test_repository_with_partial_config () =
   let toml_str =
     {|
@@ -205,8 +186,6 @@ let () =
             test_repositories_section_exists_but_empty
         ; test_case "repositories section missing" `Quick
             test_repositories_section_missing
-        ; test_case "repository with only github" `Quick
-            test_repository_with_only_github
         ; test_case "repository with partial config" `Quick
             test_repository_with_partial_config ] )
     ; ( "integer_parsing"

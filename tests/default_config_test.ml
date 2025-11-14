@@ -48,5 +48,5 @@ let () =
     [ ( "defaults"
       , [test_case "defaults for any repo" `Quick test_defaults_for_any_repo] )
     ; ( "no_hardcoded_patterns"
-      , [ test_case "defaults for any repo" `Quick
+      , [ test_case "no hardcoded patterns" `Quick
             test_defaults_no_hardcoded_patterns ] ) ]

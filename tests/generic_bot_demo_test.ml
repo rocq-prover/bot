@@ -6,26 +6,16 @@ open Alcotest
 open Default
 
 (** 
- * Demonstration tests showing how the generic bot configuration system works.
+ * Tests demonstrating the generic bot configuration system.
  * 
- * Key concepts demonstrated:
- * 1. Rocq is just a configured instance - no special code, just configuration
- * 2. Any repository can be configured with minimal effort (just github = "owner/repo")
- * 3. 3-tier configuration resolution: Explicit > Auto-Detection > Defaults
- * 4. Flexible configuration levels: full, partial, or minimal
- * 
- * Note: These are HIGH-LEVEL demonstrations. Detailed tests are in:
- * - repo_config_test.ml (parsing)
- * - repo_config_integration_test.ml (multi-repo, file loading)
- * - config_resolver_test.ml (resolution priority)
- * - auto_detection_test.ml (API auto-detection)
- * - default_config_test.ml (defaults)
+ * Key concepts:
+ * - Rocq is just a repo with explicit config, same as any other repo
+ * - Adding a repo requires only: github = "owner/repo"
+ * - Config resolution: explicit > auto-detection > defaults
+ * - Supports full, partial, or minimal configuration
  *)
 
-(** Demo 1: Rocq is a fully configured instance - no special code *)
 let test_rocq_is_configured_instance () =
-  (* Rocq is NOT hardcoded in the bot. It's just a repository with explicit configuration.
-     This shows that rocq-prover/rocq uses explicit config for features it needs. *)
   let toml_str =
     {|
 [repositories.rocq]
@@ -46,7 +36,7 @@ custom_job_status = true
     Option.value_exn
       (get_repo_config_opt ~owner:"rocq-prover" ~repo:"rocq" table)
   in
-  (* Rocq explicitly configures features it needs *)
+  (* Verify rocq's explicit configuration *)
   check bool "rocq configures custom GitLab domain (not default)"
     (Option.is_some rocq_config.gitlab_domain)
     true ;
@@ -60,14 +50,12 @@ custom_job_status = true
     | None ->
         false )
     true ;
-  (* Key point: Same configuration system as any other repo *)
   check string "rocq uses standard config format" rocq_config.github_owner
     "rocq-prover"
 
-(** Demo 2: Any repository works with just one line of config *)
 let test_minimal_repo_works_immediately () =
-  (* Show how easy it is to add ANY repository to the bot.
-     Just specify github = "owner/repo" and everything else is handled automatically. *)
+  (* Adding a repo requires only github = "owner/repo". The bot handles the rest.
+     This test shows the parsing, defaults, and resolution steps. *)
   let toml_str = {|
 [repositories.my-new-repo]
 github = "my-org/my-repo"
@@ -77,10 +65,10 @@ github = "my-org/my-repo"
   let config =
     Option.value_exn (get_repo_config_opt ~owner:"my-org" ~repo:"my-repo" table)
   in
-  (* Step 1: Parsing - only explicit values are present *)
+  (* Step 1: Parsing extracts only explicit TOML values *)
   check string "explicit github_owner from TOML" config.github_owner "my-org" ;
   check string "explicit github_repo from TOML" config.github_repo "my-repo" ;
-  (* Missing fields are None at parse time - this is expected *)
+  (* Missing fields are None after parsing *)
   check bool "gitlab_domain not in TOML, so None after parsing"
     (Option.is_none config.gitlab_domain)
     true ;
@@ -91,8 +79,8 @@ github = "my-org/my-repo"
   check (option string) "default org_name" defaults.org_name (Some "my-org") ;
   check (option string) "default team_name" defaults.team_name
     (Some "maintainers") ;
-  (* Step 3: When used in the bot, config_resolver applies defaults *)
-  (* Create mock bot_info *)
+  (* Step 3: Config resolver applies defaults at runtime *)
+  (* Create mock bot_info for resolution *)
   let gitlab_instances = Hashtbl.create (module String) in
   Hashtbl.set gitlab_instances ~key:"gitlab.com" ~data:("test-bot", "test-token") ;
   let bot_info =
@@ -108,7 +96,7 @@ github = "my-org/my-repo"
     Lwt_main.run
       (Config_resolver.resolve_repo_config ~bot_info ~explicit_config:config)
   in
-  (* After resolution: explicit values preserved, defaults applied to missing fields *)
+  (* After resolution: explicit values preserved, defaults applied *)
   check string "explicit values preserved" resolved.github_owner "my-org" ;
   check (option string) "defaults applied: gitlab_domain" resolved.gitlab_domain
     (Some "gitlab.com") ;
@@ -120,15 +108,12 @@ github = "my-org/my-repo"
     (Option.is_some resolved.ci_config)
     true ;
   check bool "defaults applied: labels" (Option.is_some resolved.labels) true ;
-  (* Conclusion: Repository works immediately with just 1 line of config! *)
   ()
 
-(** Demo 3: The 3-tier configuration system *)
 let test_three_tier_config_system () =
-  (* Demonstrate: Explicit > Auto-Detection > Defaults
-     This shows how the bot intelligently fills in missing configuration. *)
-
-  (* Example 1: Minimal config triggers auto-detection *)
+  (* Config resolution priority: explicit values first, then auto-detection from APIs,
+     then defaults. This test shows when each path is used. *)
+  (* Case 1: Minimal config triggers auto-detection *)
   let minimal_toml =
     {|
 [repositories.minimal]
@@ -141,12 +126,12 @@ github = "test-org/test-repo"
     Option.value_exn
       (get_repo_config_opt ~owner:"test-org" ~repo:"test-repo" table)
   in
-  (* Auto-detection will run because gitlab_domain and org_name are missing *)
+  (* Missing fields trigger auto-detection *)
   check bool "missing fields trigger auto-detection"
     ( Option.is_none minimal_config.gitlab_domain
     && Option.is_none minimal_config.org_name )
     true ;
-  (* Example 2: Explicit config skips auto-detection *)
+  (* Case 2: Explicit config skips auto-detection *)
   let explicit_toml =
     {|
 [repositories.explicit]
@@ -161,18 +146,16 @@ org_name = "test-org"
     Option.value_exn
       (get_repo_config_opt ~owner:"test-org" ~repo:"test-repo" table2)
   in
-  (* Auto-detection skipped because key fields are present *)
+  (* Explicit fields skip auto-detection *)
   check bool "explicit fields skip auto-detection"
     ( Option.is_some explicit_config.gitlab_domain
     && Option.is_some explicit_config.org_name )
     true ;
-  (* Conclusion: Bot is smart - auto-detects when needed, uses explicit config when available *)
   ()
 
-(** Demo 4: Partial configuration - override only what you need *)
 let test_partial_config_flexibility () =
-  (* Show that you can override specific defaults while keeping others.
-     This demonstrates flexibility: configure as much or as little as you want. *)
+  (* We can override specific defaults while keeping the rest. This allows
+     customizing only what's needed without repeating all config. *)
   let toml_str =
     {|
 [repositories.custom]
@@ -192,17 +175,14 @@ team_name = "developers"
     config.gitlab_domain (Some "gitlab.example.com") ;
   check (option string) "explicit team_name overrides default" config.team_name
     (Some "developers") ;
-  (* Missing values use defaults *)
+  (* Unspecified fields use defaults *)
   let defaults = get_defaults ~owner:"custom-org" ~repo:"custom-repo" in
   check (option string) "org_name uses default" defaults.org_name
     (Some "custom-org") ;
-  (* Conclusion: Mix and match explicit config with defaults as needed *)
   ()
 
-(** Demo 5: Multiple repositories with different config levels *)
+(** Tests multiple repos with different config levels in the same file *)
 let test_multiple_repos_coexist () =
-  (* Show that repos can have different config levels and work independently.
-     This demonstrates the bot's flexibility for different use cases. *)
   let toml_str =
     {|
 [repositories.full-featured]
@@ -219,14 +199,14 @@ github = "org2/repo2"
   in
   let toml_data = Utils.toml_of_string toml_str in
   let table = repo_config_table toml_data in
-  (* Both repositories exist in the same config *)
+  (* Both repos exist in the same config *)
   check bool "full-featured repo configured"
     (has_repo_config ~owner:"org1" ~repo:"repo1" table)
     true ;
   check bool "basic repo configured"
     (has_repo_config ~owner:"org2" ~repo:"repo2" table)
     true ;
-  (* They have different config levels *)
+  (* Verify they have different config levels *)
   let full_config =
     Option.value_exn (get_repo_config_opt ~owner:"org1" ~repo:"repo1" table)
   in
@@ -239,13 +219,10 @@ github = "org2/repo2"
   check bool "basic has no project_number (backport disabled)"
     (Option.is_none basic_config.github_project_number)
     true ;
-  (* Conclusion: Different repos can have different feature sets *)
   ()
 
-(** Demo 6: Rocq vs generic repo - both use the same system *)
+(** Compares rocq and a generic repo to show they use the same config system *)
 let test_rocq_vs_generic_same_system () =
-  (* Demonstrate that rocq is NOT special - it just has more explicit configuration.
-     Any other repo could have the same features by adding the same config. *)
   let toml_str =
     {|
 [repositories.rocq]
@@ -266,59 +243,27 @@ github = "ocaml/opam"
   let opam_config =
     Option.value_exn (get_repo_config_opt ~owner:"ocaml" ~repo:"opam" table)
   in
-  (* Both use the SAME configuration system *)
+  (* Both use the same config system *)
   check string "rocq uses standard config" rocq_config.github_owner
     "rocq-prover" ;
   check string "opam uses standard config" opam_config.github_owner "ocaml" ;
-  (* Difference is only in CONFIGURATION, not code *)
   check bool "rocq has explicit gitlab_domain"
     (Option.is_some rocq_config.gitlab_domain)
     true ;
   check bool "opam uses default gitlab_domain"
     (Option.is_none opam_config.gitlab_domain)
     true ;
-  (* But both have access to defaults *)
+  (* Both can access the same defaults *)
   let rocq_defaults = get_defaults ~owner:"rocq-prover" ~repo:"rocq" in
   let opam_defaults = get_defaults ~owner:"ocaml" ~repo:"opam" in
   check bool "both can use defaults"
     ( Option.is_some rocq_defaults.gitlab_domain
     && Option.is_some opam_defaults.gitlab_domain )
     true ;
-  (* Conclusion: Rocq is just a configured instance, not special code *)
   ()
 
-(** Demo 7: Configuration is easy - just one line for basic setup *)
-let test_config_ease_of_use () =
-  (* Show how simple it is to add a new repository to the bot.
-     This is the key selling point: minimal configuration required. *)
-  let minimal_toml =
-    {|
-[repositories.new-repo]
-github = "new-org/new-repo"
-|}
-  in
-  let toml_data = Utils.toml_of_string minimal_toml in
-  let table = repo_config_table toml_data in
-  (* Just 1 line and the repo is ready to use *)
-  check bool "repo configured with 1 line"
-    (has_repo_config ~owner:"new-org" ~repo:"new-repo" table)
-    true ;
-  (* Defaults fill in everything else *)
-  let defaults = get_defaults ~owner:"new-org" ~repo:"new-repo" in
-  check bool "defaults provide gitlab_domain"
-    (Option.is_some defaults.gitlab_domain)
-    true ;
-  check bool "defaults provide CI config"
-    (Option.is_some defaults.ci_config)
-    true ;
-  check bool "defaults provide labels" (Option.is_some defaults.labels) true ;
-  (* Conclusion: Bot is very easy to configure for any repository *)
-  ()
-
-(** Demo 8: Complete configuration coverage - all available options *)
+(** Tests all available configuration options - serves as a reference *)
 let test_complete_config_coverage () =
-  (* This test demonstrates ALL available configuration options.
-     It serves as documentation for what can be configured. *)
   let toml_str =
     {|
 [repositories.complete]
@@ -376,12 +321,11 @@ ml_api_path = "path/to/ml-api.html"
   check (option string) "team_name" config.team_name (Some "maintainers") ;
   check (option string) "minimizer_url" config.minimizer_url
     (Some "https://custom-minimizer.com") ;
-  (* Verify nested configs *)
+  (* Verify nested config sections *)
   check bool "ci_config present" (Option.is_some config.ci_config) true ;
   check bool "labels present" (Option.is_some config.labels) true ;
   check bool "jobs present" (Option.is_some config.jobs) true ;
   check bool "documentation present" (Option.is_some config.documentation) true ;
-  (* Conclusion: All fields are available for configuration *)
   ()
 
 let () =
@@ -401,8 +345,6 @@ let () =
     ; ( "comparison"
       , [ test_case "rocq vs generic same system" `Quick
             test_rocq_vs_generic_same_system ] )
-    ; ( "ease_of_use"
-      , [test_case "config ease of use" `Quick test_config_ease_of_use] )
     ; ( "documentation"
       , [ test_case "complete config coverage" `Quick
             test_complete_config_coverage ] ) ]

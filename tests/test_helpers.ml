@@ -78,6 +78,14 @@ let check_raises_failure msg f =
       Alcotest.fail
         (msg ^ ": expected Failure exception, but got: " ^ Exn.to_string e)
 
+(** Get bot_info for testing: tries real credentials first, falls back to mock *)
+let get_bot_info () =
+  match create_real_bot_info () with
+  | Some info ->
+      info
+  | None ->
+      create_mock_bot_info ()
+
 (** Helper to create a test Repo_config.t for testing *)
 let create_test_config ~owner ~repo ~gitlab_domain =
   { github_owner= owner

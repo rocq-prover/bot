@@ -2,17 +2,9 @@ open Test_helpers
 open Auto_detection
 open Alcotest
 
-(** Test GitLab info detection - should fallback to default domain if not found
-  *)
 let test_auto_detect_gitlab_info () =
   (* Test with real GitLab API if credentials are available, otherwise use mock *)
-  let bot_info =
-    match create_real_bot_info () with
-    | Some info ->
-        info (* Use real credentials if available *)
-    | None ->
-        create_mock_bot_info () (* Fallback to mock *)
-  in
+  let bot_info = get_bot_info () in
   let owner = "test-org" in
   let repo = "test-repo" in
   let result =
@@ -30,12 +22,12 @@ let test_auto_detect_gitlab_info () =
 
 (** Test org/team detection with real API or graceful skip *)
 let test_auto_detect_org_team () =
-  (* Test with real GitHub API if credentials are available *)
-  match create_real_bot_info () with
+  let bot_info = get_bot_info () in
+  (* Skip test if no real credentials - this is expected in CI without secrets *)
+  match bot_info.github_install_token with
   | None ->
-      (* Skip test if no credentials - this is expected in CI without secrets *)
       Alcotest.skip ()
-  | Some bot_info -> (
+  | Some _ -> (
       (* Use a real public repository for testing that is known to exist *)
       let owner = "ocaml" in
       let repo = "opam" in
@@ -63,12 +55,12 @@ let test_auto_detect_org_team () =
 
 (** Test complete auto-detection with caching *)
 let test_auto_detect_from_apis () =
-  (* Test with real GitHub API if credentials are available *)
-  match create_real_bot_info () with
+  let bot_info = get_bot_info () in
+  (* Skip test if no real credentials *)
+  match bot_info.github_install_token with
   | None ->
-      (* Skip test if no credentials - this is expected in CI without secrets *)
       Alcotest.skip ()
-  | Some bot_info ->
+  | Some _ ->
       (* Use a real public repository for testing *)
       let owner = "ocaml" in
       let repo = "opam" in
@@ -102,10 +94,12 @@ let test_auto_detect_from_apis () =
 
 (** Test that auto_detect_from_apis returns a complete Repo_config.t *)
 let test_auto_detect_from_apis_completeness () =
-  match create_real_bot_info () with
+  let bot_info = get_bot_info () in
+  (* Skip test if no real credentials *)
+  match bot_info.github_install_token with
   | None ->
       Alcotest.skip ()
-  | Some bot_info ->
+  | Some _ ->
       let owner = "ocaml" in
       let repo = "opam" in
       Cache.clear_all () ;
@@ -124,8 +118,6 @@ let test_auto_detect_from_apis_completeness () =
       check bool "org_name is Some" (Option.is_some result.org_name) true ;
       (* team_name should be Some *)
       check bool "team_name is Some" (Option.is_some result.team_name) true ;
-      (* minimizer_url may be Some (if BOT_MINIMIZER_URL env var is set) or None (generic default) *)
-      (* This is acceptable - minimizer_url is optional and can be configured per-repo *)
       (* ci_config should be Some (from defaults) *)
       check bool "ci_config is Some" (Option.is_some result.ci_config) true
 

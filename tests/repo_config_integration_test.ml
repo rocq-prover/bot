@@ -148,38 +148,10 @@ let test_multiple_repositories_in_table () =
     (get_repo_config_opt ~owner:"unknown" ~repo:"repo" table)
     None
 
-let test_table_lookup_performance () =
-  (* Test that table lookups work correctly for all entries *)
-  let config_file = "test-config.toml" in
-  let toml_data = Utils.toml_of_file config_file in
-  let table = repo_config_table toml_data in
-  (* Test all lookups work *)
-  let rocq =
-    Option.value_exn
-      (get_repo_config_opt ~owner:"rocq-prover" ~repo:"rocq" table)
-  in
-  let coq =
-    Option.value_exn (get_repo_config_opt ~owner:"coq" ~repo:"coq" table)
-  in
-  let opam =
-    Option.value_exn (get_repo_config_opt ~owner:"ocaml" ~repo:"opam" table)
-  in
-  (* Verify all configs are distinct *)
-  check bool "rocq and coq should be different"
-    (not (String.equal rocq.github_owner coq.github_owner))
-    true ;
-  check bool "coq and opam should be different"
-    (not (String.equal coq.github_owner opam.github_owner))
-    true ;
-  (* Verify table size matches expected *)
-  check int "table should have 3 entries" 3 (Hashtbl.length table)
-
 let () =
   run "Repo_config_integration"
     [ ( "file_loading"
       , [test_case "load from TOML file" `Quick test_load_from_toml_file] )
     ; ( "multiple_repositories"
       , [ test_case "multiple repositories in table" `Quick
-            test_multiple_repositories_in_table
-        ; test_case "table lookup performance" `Quick
-            test_table_lookup_performance ] ) ]
+            test_multiple_repositories_in_table ] ) ]
