@@ -31,15 +31,17 @@ open Test_helpers
 let test_minimizer_url_integration () =
   let bot_info = create_mock_bot_info () in
   (* Test case 1: TOML config only - explicit config takes priority *)
+  (* Provide gitlab_domain and org_name to prevent auto-detection from being triggered,
+     since this test focuses on minimizer_url behavior, not auto-detection *)
   let config_with_toml_minimizer =
     { github_owner= "test-org"
     ; github_repo= "test-repo"
-    ; gitlab_domain= None
+    ; gitlab_domain= Some "gitlab.com"
     ; gitlab_owner= None
     ; gitlab_repo= None
     ; github_installation_id= None
     ; github_project_number= None
-    ; org_name= None
+    ; org_name= Some "test-org"
     ; team_name= None
     ; minimizer_url= Some "https://toml-minimizer.com"
     ; ci_config= None
@@ -59,15 +61,16 @@ let test_minimizer_url_integration () =
   let original_env_var = Sys.getenv "BOT_MINIMIZER_URL" in
   (* Set env var for this test *)
   Unix.putenv "BOT_MINIMIZER_URL" "https://env-minimizer.com" ;
+  (* Provide gitlab_domain and org_name to prevent auto-detection *)
   let config_without_minimizer =
     { github_owner= "test-org"
     ; github_repo= "test-repo"
-    ; gitlab_domain= None
+    ; gitlab_domain= Some "gitlab.com"
     ; gitlab_owner= None
     ; gitlab_repo= None
     ; github_installation_id= None
     ; github_project_number= None
-    ; org_name= None
+    ; org_name= Some "test-org"
     ; team_name= None
     ; minimizer_url= None
     ; ci_config= None
@@ -85,15 +88,16 @@ let test_minimizer_url_integration () =
   (* Test case 2b: None when neither TOML nor env var is configured *)
   (* Clear env var by setting it to empty string (which gets treated as None) *)
   Unix.putenv "BOT_MINIMIZER_URL" "" ;
+  (* Provide gitlab_domain and org_name to prevent auto-detection *)
   let config_without_minimizer =
     { github_owner= "test-org"
     ; github_repo= "test-repo"
-    ; gitlab_domain= None
+    ; gitlab_domain= Some "gitlab.com"
     ; gitlab_owner= None
     ; gitlab_repo= None
     ; github_installation_id= None
     ; github_project_number= None
-    ; org_name= None
+    ; org_name= Some "test-org"
     ; team_name= None
     ; minimizer_url= None
     ; ci_config= None
@@ -113,15 +117,16 @@ let test_minimizer_url_integration () =
   Unix.putenv "BOT_MINIMIZER_URL" "https://env-should-be-ignored.com" ;
   (* This verifies the priority: Explicit > Auto-detected > Defaults *)
   (* Since TOML is explicit config, it should override env var (which is in defaults) *)
+  (* Provide gitlab_domain and org_name to prevent auto-detection *)
   let config_with_both =
     { github_owner= "test-org"
     ; github_repo= "test-repo"
-    ; gitlab_domain= None
+    ; gitlab_domain= Some "gitlab.com"
     ; gitlab_owner= None
     ; gitlab_repo= None
     ; github_installation_id= None
     ; github_project_number= None
-    ; org_name= None
+    ; org_name= Some "test-org"
     ; team_name= None
     ; minimizer_url= Some "https://toml-priority.com"
     ; ci_config= None

@@ -37,6 +37,12 @@ let test_merge_priority_explicit_overrides () =
     (Some 12345)
 
 let test_merge_priority_api_fills_gaps () =
+  (* Skip test if no real credentials - API calls require installation token *)
+  ( match bot_info.github_install_token with
+  | None ->
+      Alcotest.skip ()
+  | Some _ ->
+      () ) ;
   let explicit_config =
     { github_owner= "test-org"
     ; github_repo= "test-repo"
@@ -64,6 +70,12 @@ let test_merge_priority_api_fills_gaps () =
   check (option string) "api team_name" result.team_name (Some "maintainers")
 
 let test_merge_priority_defaults_fallback () =
+  (* Skip test if no real credentials - API calls require installation token *)
+  ( match bot_info.github_install_token with
+  | None ->
+      Alcotest.skip ()
+  | Some _ ->
+      () ) ;
   let explicit_config =
     { github_owner= "unknown-org"
     ; github_repo= "unknown-repo"
