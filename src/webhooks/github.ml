@@ -234,7 +234,7 @@ let handle_github_webhook ~bot_info ~key ~app_id ~github_bot_name
   | Ok (None, _) ->
       (fun () ->
         Lwt_io.printf
-          "[INFO] Webhook received without installation.id (legacy webhook \
+          "[Error] Webhook received without installation.id (legacy webhook \
            format, GitHub App installation required for actions)" )
       |> Lwt.async
   | Error err ->

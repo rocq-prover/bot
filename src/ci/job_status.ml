@@ -1,6 +1,5 @@
 open Base
 open Bot_components
-open Bot_info
 open GitLab_types
 open GitHub_types
 open Utils
@@ -20,7 +19,7 @@ type build_failure = Warn of string | Retry of string | Ignore of string
 (******************************************************************************)
 
 let send_status_check ~bot_info job_info ~pr_num (gh_owner, gh_repo)
-    ~github_repo_full_name ~gitlab_domain ~gitlab_repo_full_name ~context
+    ~github_repo_full_name:_ ~gitlab_domain ~gitlab_repo_full_name ~context
     ~failure_reason ~external_id ~trace
     ?(summary_builder = fun _ trace_description -> Lwt.return trace_description)
     ?(allow_failure_handler =
@@ -74,40 +73,28 @@ let send_status_check ~bot_info job_info ~pr_num (gh_owner, gh_repo)
   let text = "```\n" ^ short_trace ^ "\n```" in
   if job_info.allow_fail then
     Lwt_io.printf "Job is allowed to fail.\n"
-    <&> ( match bot_info.github_install_token with
-        | None ->
-            (* Allow failure messages are reported with the Checks API only. *)
-            Lwt.return_unit
-        | Some _ -> (
-            GitHub_queries.get_repository_id ~bot_info ~owner:gh_owner
-              ~repo:gh_repo
-            >>= function
-            | Ok repo_id ->
-                let open Lwt.Syntax in
-                let+ _ =
-                  GitHub_mutations.create_check_run ~bot_info ~name:context
-                    ~repo_id ~head_sha:job_info.common_info.head_commit
-                    ~conclusion:NEUTRAL ~status:COMPLETED ~title
-                    ~details_url:job_url
-                    ~summary:("This job is allowed to fail.\n\n" ^ summary_tail)
-                    ~text ~external_id ()
-                in
-                ()
-            | Error e ->
-                Lwt_io.printf "No repo id: %s\n" e ) )
+    <&> ( GitHub_queries.get_repository_id ~bot_info ~owner:gh_owner
+            ~repo:gh_repo
+        >>= function
+        | Ok repo_id ->
+            let open Lwt.Syntax in
+            let+ _ =
+              GitHub_mutations.create_check_run ~bot_info ~name:context ~repo_id
+                ~head_sha:job_info.common_info.head_commit ~conclusion:NEUTRAL
+                ~status:COMPLETED ~title ~details_url:job_url
+                ~summary:("This job is allowed to fail.\n\n" ^ summary_tail)
+                ~text ~external_id ()
+            in
+            ()
+        | Error e ->
+            Lwt_io.printf "No repo id: %s\n" e )
     <&> allow_failure_handler ~bot_info ~job_name:job_info.build_name ~job_url
           ~pr_num ~head_commit:job_info.common_info.head_commit
           (gh_owner, gh_repo) ~gitlab_repo_full_name
   else
     Lwt_io.printf "Pushing a status check...\n"
-    <&>
-    match bot_info.github_install_token with
-    | None ->
-        GitHub_mutations.send_status_check ~repo_full_name:github_repo_full_name
-          ~commit:job_info.common_info.head_commit ~state:"failure" ~url:job_url
-          ~context ~description:title ~bot_info
-    | Some _ -> (
-        GitHub_queries.get_repository_id ~bot_info ~owner:gh_owner ~repo:gh_repo
+    <&> ( GitHub_queries.get_repository_id ~bot_info ~owner:gh_owner
+            ~repo:gh_repo
         >>= function
         | Ok repo_id ->
             let open Lwt.Syntax in
@@ -227,8 +214,8 @@ let job_failure ~bot_info job_info ~pr_num (gh_owner, gh_repo)
       Lwt_io.printl reason
 
 let job_success_or_pending ~bot_info (gh_owner, gh_repo) job_info
-    ~github_repo_full_name ~gitlab_domain ~gitlab_repo_full_name ~context ~state
-    ~external_id =
+    ~github_repo_full_name:_ ~gitlab_domain ~gitlab_repo_full_name ~context
+    ~state ~external_id =
   let {build_id} = job_info in
   GitHub_queries.get_status_check ~bot_info ~owner:gh_owner ~repo:gh_repo
     ~commit:job_info.common_info.head_commit ~context
@@ -241,7 +228,7 @@ let job_success_or_pending ~bot_info (gh_owner, gh_repo) job_info
       let job_url =
         f "https://%s/%s/-/jobs/%d" gitlab_domain gitlab_repo_full_name build_id
       in
-      let state, status, conclusion, description =
+      let _state, status, conclusion, description =
         match state with
         | "success" ->
             ( "success"
@@ -263,27 +250,19 @@ let job_success_or_pending ~bot_info (gh_owner, gh_repo) job_info
               (f "Error: job_success_or_pending received unknown state %s."
                  state )
       in
-      match bot_info.github_install_token with
-      | None ->
-          GitHub_mutations.send_status_check ~bot_info
-            ~repo_full_name:github_repo_full_name
-            ~commit:job_info.common_info.head_commit ~state ~url:job_url
-            ~context ~description
-      | Some _ -> (
-          GitHub_queries.get_repository_id ~bot_info ~owner:gh_owner
-            ~repo:gh_repo
-          >>= function
-          | Ok repo_id ->
-              let open Lwt.Syntax in
-              let+ _ =
-                GitHub_mutations.create_check_run ~bot_info ~name:context
-                  ~status ~repo_id ~head_sha:job_info.common_info.head_commit
-                  ?conclusion ~title:description ~details_url:job_url
-                  ~summary:"" ~external_id ()
-              in
+      GitHub_queries.get_repository_id ~bot_info ~owner:gh_owner ~repo:gh_repo
+      >>= function
+      | Ok repo_id ->
+          let open Lwt.Syntax in
+          let+ _ =
+            GitHub_mutations.create_check_run ~bot_info ~name:context ~status
+              ~repo_id ~head_sha:job_info.common_info.head_commit ?conclusion
+              ~title:description ~details_url:job_url ~summary:"" ~external_id
               ()
-          | Error e ->
-              Lwt_io.printf "No repo id: %s\n" e ) )
+          in
+          ()
+      | Error e ->
+          Lwt_io.printf "No repo id: %s\n" e )
   | Ok _ ->
       Lwt.return_unit
   | Error e ->
@@ -310,7 +289,7 @@ let pipeline_action ~bot_info ({common_info= {http_repo_url}} as pipeline_info)
       | Error err ->
           Lwt_io.printlf "Error in pipeline action: %s" err
       | Ok (gh_owner, gh_repo) -> (
-          let state, status, conclusion, title, summary_top =
+          let _state, status, conclusion, title, summary_top =
             (* Check if this repo should have full CI detection *)
             let full_ci =
               match full_ci_check_repo with
@@ -383,57 +362,46 @@ let pipeline_action ~bot_info ({common_info= {http_repo_url}} as pipeline_info)
                 , "Unknown pipeline status: " ^ s
                 , None )
           in
-          match bot_info.github_install_token with
-          | None ->
-              GitHub_mutations.send_status_check
-                ~repo_full_name:(gh_owner ^ "/" ^ gh_repo)
-                ~commit:pipeline_info.common_info.head_commit ~state
-                ~url:pipeline_url
-                ~context:
+          GitHub_queries.get_repository_id ~bot_info ~owner:gh_owner
+            ~repo:gh_repo
+          >>= function
+          | Error e ->
+              Lwt_io.printf "No repo id: %s\n" e
+          | Ok repo_id -> (
+              let summary =
+                CI_utils.create_pipeline_summary ?summary_top pipeline_info
+                  pipeline_url
+              in
+              GitHub_mutations.create_check_run ~bot_info
+                ~name:
                   (f "GitLab CI pipeline (%s)"
                      (pr_from_branch pipeline_info.common_info.branch |> snd) )
-                ~description:title ~bot_info
-          | Some _ -> (
-              GitHub_queries.get_repository_id ~bot_info ~owner:gh_owner
-                ~repo:gh_repo
-              >>= function
-              | Error e ->
-                  Lwt_io.printf "No repo id: %s\n" e
-              | Ok repo_id -> (
-                  let summary =
-                    CI_utils.create_pipeline_summary ?summary_top pipeline_info
-                      pipeline_url
-                  in
-                  GitHub_mutations.create_check_run ~bot_info
-                    ~name:
-                      (f "GitLab CI pipeline (%s)"
-                         (pr_from_branch pipeline_info.common_info.branch |> snd) )
-                    ~repo_id ~head_sha:pipeline_info.common_info.head_commit
-                    ~status ?conclusion ~title ~details_url:pipeline_url
-                    ~summary ~external_id ()
-                  >>= fun _ ->
-                  Lwt_unix.sleep 5.
-                  >>= fun () ->
-                  match
-                    ( auto_minimize_on_failure
-                    , gh_owner
-                    , gh_repo
-                    , pipeline_info.state
-                    , pr_number )
-                  with
-                  | ( Some (min_owner, min_repo)
-                    , owner
-                    , repo
-                    , "failed"
-                    , Some pr_number )
-                    when String.equal owner min_owner
-                         && String.equal repo min_repo ->
-                      Minimization.minimize_failed_tests ~bot_info
-                        ~owner:gh_owner ~repo:gh_repo ~pr_number
-                        ~head_pipeline_summary:(Some summary)
-                        ~request:Minimization.Auto ~comment_on_error:false
-                        ~options:"" ~bug_file:None
-                        ?base_sha:pipeline_info.common_info.base_commit
-                        ~head_sha:pipeline_info.common_info.head_commit ()
-                  | _ ->
-                      Lwt.return_unit ) ) ) )
+                ~repo_id ~head_sha:pipeline_info.common_info.head_commit ~status
+                ?conclusion ~title ~details_url:pipeline_url ~summary
+                ~external_id ()
+              >>= fun _ ->
+              Lwt_unix.sleep 5.
+              >>= fun () ->
+              match
+                ( auto_minimize_on_failure
+                , gh_owner
+                , gh_repo
+                , pipeline_info.state
+                , pr_number )
+              with
+              | ( Some (min_owner, min_repo)
+                , owner
+                , repo
+                , "failed"
+                , Some pr_number )
+                when String.equal owner min_owner && String.equal repo min_repo
+                ->
+                  Minimization.minimize_failed_tests ~bot_info ~owner:gh_owner
+                    ~repo:gh_repo ~pr_number
+                    ~head_pipeline_summary:(Some summary)
+                    ~request:Minimization.Auto ~comment_on_error:false
+                    ~options:"" ~bug_file:None
+                    ?base_sha:pipeline_info.common_info.base_commit
+                    ~head_sha:pipeline_info.common_info.head_commit ()
+              | _ ->
+                  Lwt.return_unit ) ) )

@@ -19,7 +19,7 @@ let send_graphql_query ~bot_info ?(extra_headers = []) ?(ignore_errors = false)
   | GitLab gitlab_domain ->
       gitlab_name_and_token bot_info gitlab_domain
   | GitHub ->
-      Ok (bot_info.github_name, github_token bot_info) )
+      Ok (bot_info.github_name, bot_info.github_install_token) )
   |> Lwt.return
   >>= fun (name, token) ->
   let headers =

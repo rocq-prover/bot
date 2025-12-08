@@ -206,8 +206,10 @@ Notes:
 - Installation as a GitHub App is still in an experimental stage
 and you may frequently receive requests to expand permissions.
 
-- The bot requires GitHub App installation. The legacy installation
-method using Personal Access Tokens (PAT) is no longer supported.
+- The bot requires GitHub App installation and uses the installation
+token for all standard operations. A GitHub Personal Access Token (PAT)
+is optional and only needed for the Rocq minimization flows that must act
+as the `coqbot` user rather than the GitHub App.
 
 The bot can be installed as a GitHub App to either your account or
 organization ([link to app](https://github.com/apps/coqbot-app)).

@@ -1,6 +1,5 @@
 open Base
 open Bot_components
-open Bot_components.Bot_info
 open Bot_components.GitHub_types
 open Bot_components.GitHub_GitLab_sync
 open Cohttp_lwt_unix
@@ -145,38 +144,25 @@ let update_pr ?full_ci ?(skip_author_check = false) ~bot_info
     (* Add rebase label if it exists *)
     GitHub_automation.add_labels_if_absent ~bot_info pr_info.issue [rebase_label] ;
     (* Add fail status check *)
-    match bot_info.github_install_token with
-    | None ->
-        GitHub_mutations.send_status_check
-          ~repo_full_name:
-            (f "%s/%s" pr_info.issue.issue.owner pr_info.issue.issue.repo)
-          ~commit:pr_info.head.sha ~state:"error" ~url:""
-          ~context:"GitLab CI pipeline (pull request)"
-          ~description:
-            "Pipeline did not run on GitLab CI because PR has conflicts with \
-             base branch."
-          ~bot_info
+    let open Lwt.Infix in
+    let open Lwt.Syntax in
+    GitHub_queries.get_repository_id ~bot_info ~owner:pr_info.issue.issue.owner
+      ~repo:pr_info.issue.issue.repo
+    >>= function
+    | Ok repo_id ->
+        (let+ _ =
+           GitHub_mutations.create_check_run ~bot_info
+             ~name:"GitLab CI pipeline (pull request)" ~status:COMPLETED
+             ~repo_id ~head_sha:pr_info.head.sha ~conclusion:FAILURE
+             ~title:
+               "Pipeline did not run on GitLab CI because PR has conflicts \
+                with base branch."
+             ~details_url:"" ~summary:"" ()
+         in
+         () )
         |> Lwt_result.ok
-    | Some _ -> (
-        let open Lwt.Infix in
-        let open Lwt.Syntax in
-        GitHub_queries.get_repository_id ~bot_info
-          ~owner:pr_info.issue.issue.owner ~repo:pr_info.issue.issue.repo
-        >>= function
-        | Ok repo_id ->
-            (let+ _ =
-               GitHub_mutations.create_check_run ~bot_info
-                 ~name:"GitLab CI pipeline (pull request)" ~status:COMPLETED
-                 ~repo_id ~head_sha:pr_info.head.sha ~conclusion:FAILURE
-                 ~title:
-                   "Pipeline did not run on GitLab CI because PR has conflicts \
-                    with base branch."
-                 ~details_url:"" ~summary:"" ()
-             in
-             () )
-            |> Lwt_result.ok
-        | Error e ->
-            Lwt.return (Error e) ) )
+    | Error e ->
+        Lwt.return (Error e) )
 
 let run_ci_action ~bot_info ~comment_info ?full_ci ~gitlab_mapping
     ~github_mapping () =

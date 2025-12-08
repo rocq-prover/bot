@@ -1,7 +1,6 @@
 open Base
 open GitLab_types
 open GitHub_types
-open Bot_info
 open Utils
 open String_utils
 open Lwt.Infix
@@ -254,7 +253,7 @@ let parse_github_artifact_url url =
 (******************************************************************************)
 
 let send_status_check ~bot_info job_info ~pr_num (gh_owner, gh_repo)
-    ~github_repo_full_name ~gitlab_domain ~gitlab_repo_full_name ~context
+    ~github_repo_full_name:_ ~gitlab_domain ~gitlab_repo_full_name ~context
     ~failure_reason ~external_id ~trace =
   let job_url =
     f "https://%s/%s/-/jobs/%d" gitlab_domain gitlab_repo_full_name
@@ -342,27 +341,21 @@ let send_status_check ~bot_info job_info ~pr_num (gh_owner, gh_repo)
   let text = "```\n" ^ short_trace ^ "\n```" in
   if job_info.allow_fail then
     Lwt_io.printf "Job is allowed to fail.\n"
-    <&> ( match bot_info.github_install_token with
-        | None ->
-            (* Allow failure messages are reported with the Checks API only. *)
-            Lwt.return_unit
-        | Some _ -> (
-            GitHub_queries.get_repository_id ~bot_info ~owner:gh_owner
-              ~repo:gh_repo
-            >>= function
-            | Ok repo_id ->
-                let open Lwt.Syntax in
-                let+ _ =
-                  GitHub_mutations.create_check_run ~bot_info ~name:context
-                    ~repo_id ~head_sha:job_info.common_info.head_commit
-                    ~conclusion:NEUTRAL ~status:COMPLETED ~title
-                    ~details_url:job_url
-                    ~summary:("This job is allowed to fail.\n\n" ^ summary_tail)
-                    ~text ~external_id ()
-                in
-                ()
-            | Error e ->
-                Lwt_io.printf "No repo id: %s\n" e ) )
+    <&> ( GitHub_queries.get_repository_id ~bot_info ~owner:gh_owner
+            ~repo:gh_repo
+        >>= function
+        | Ok repo_id ->
+            let open Lwt.Syntax in
+            let+ _ =
+              GitHub_mutations.create_check_run ~bot_info ~name:context ~repo_id
+                ~head_sha:job_info.common_info.head_commit ~conclusion:NEUTRAL
+                ~status:COMPLETED ~title ~details_url:job_url
+                ~summary:("This job is allowed to fail.\n\n" ^ summary_tail)
+                ~text ~external_id ()
+            in
+            ()
+        | Error e ->
+            Lwt_io.printf "No repo id: %s\n" e )
     <&>
     (* If we are in a PR branch, we can post a comment. *)
     if String.equal job_info.build_name "library:ci-fiat_crypto_legacy" then
@@ -397,14 +390,8 @@ let send_status_check ~bot_info job_info ~pr_num (gh_owner, gh_repo)
     else Lwt.return_unit
   else
     Lwt_io.printf "Pushing a status check...\n"
-    <&>
-    match bot_info.github_install_token with
-    | None ->
-        GitHub_mutations.send_status_check ~repo_full_name:github_repo_full_name
-          ~commit:job_info.common_info.head_commit ~state:"failure" ~url:job_url
-          ~context ~description:title ~bot_info
-    | Some _ -> (
-        GitHub_queries.get_repository_id ~bot_info ~owner:gh_owner ~repo:gh_repo
+    <&> ( GitHub_queries.get_repository_id ~bot_info ~owner:gh_owner
+            ~repo:gh_repo
         >>= function
         | Ok repo_id ->
             let open Lwt.Syntax in
