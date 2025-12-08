@@ -18,9 +18,7 @@ let action_with_new_installation_token ~bot_info ~key ~app_id ~install_id action
         Hashtbl.add installation_tokens ~key:install_id
           ~data:(install_token, expiration_date)
       in
-      let bot_info : Bot_info.t =
-        {bot_info with github_install_token= Some install_token}
-      in
+      let bot_info : Bot_info.t = {bot_info with github_install_token= install_token} in
       action ~bot_info
   | Error err ->
       failwith
@@ -42,7 +40,7 @@ let action_as_github_app_from_install_id ~bot_info ~key ~app_id ~install_id
           action )
       else
         let bot_info : Bot_info.t =
-          {bot_info with github_install_token= Some install_token}
+          {bot_info with github_install_token= install_token}
         in
         action ~bot_info
   | None ->

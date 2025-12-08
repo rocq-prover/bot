@@ -1389,7 +1389,7 @@ let coq_bug_minimizer_results_action ~bot_info ~ci ~key ~app_id body =
           <&> ( Git_utils.execute_cmd
                   (f "git push https://%s:%s@github.com/%s.git --delete '%s"
                      bot_info.github_name
-                     (Bot_info.github_token bot_info)
+                     (Bot_info.github_pat bot_info)
                      repo_name branch_name )
               >>= function
               | Ok () ->

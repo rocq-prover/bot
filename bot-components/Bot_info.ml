@@ -2,22 +2,21 @@ open Base
 
 type t =
   { gitlab_instances: (string, string * string) Hashtbl.t
-  ; github_install_token: string option
+  ; github_pat: string option
+  ; github_install_token: string
   ; github_name: string
   ; email: string
   ; domain: string
   ; app_id: int }
 
-(* Returns the GitHub installation token. Requires installation token to be set. *)
-let github_token bot_info =
-  match bot_info.github_install_token with
-  | Some t ->
-      t
+let github_pat bot_info =
+  match bot_info.github_pat with
+  | Some pat ->
+      pat
   | None ->
-      (* TODO: use Result.t later *)
       failwith
-        "GitHub installation token is required. Please ensure the GitHub App \
-         is installed and an installation token is available."
+        "No GitHub PAT available. This operation requires a GitHub PAT. Please \
+         ensure the PAT is set in the configuration."
 
 let gitlab_name_and_token bot_info gitlab_domain =
   match Hashtbl.find bot_info.gitlab_instances gitlab_domain with

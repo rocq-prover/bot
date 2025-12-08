@@ -21,7 +21,8 @@ let key = Config.github_private_key ()
 let app_id = Config.github_app_id toml_data
 
 let bot_info : Bot_components.Bot_info.t =
-  { github_install_token= None
+  { github_install_token= ""
+  ; github_pat= None
   ; gitlab_instances= Config.gitlab_instances toml_data
   ; github_name= github_bot_name
   ; email= Config.bot_email toml_data
