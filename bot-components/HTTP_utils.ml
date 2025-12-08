@@ -21,7 +21,7 @@ let headers_of_list = headers
 
 (* GitHub authorization header builder *)
 let github_header bot_info =
-  [("Authorization", "bearer " ^ github_token bot_info)]
+  [("Authorization", "bearer " ^ bot_info.github_install_token)]
 
 (* GitHub API preview headers *)
 let project_api_preview_header =
