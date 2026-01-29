@@ -28,3 +28,8 @@
  (name test_pat_usage)
  (modules test_pat_usage)
  (libraries alcotest bot-components coq-bot.utils base test_helpers))
+
+(test
+ (name test_minimize_parser)
+ (modules test_minimize_parser)
+ (libraries alcotest bot-components base))
