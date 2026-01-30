@@ -14,7 +14,5 @@ jobs:
       - uses: cachix/install-nix-action@v27
         with:
           nix_path: nixpkgs=channel:nixos-unstable
-      - name: Create dummy token file for dune
-        run: echo "dummy" > bot-components/.github-token
-      - name: Build and test
-        run: nix-shell --run "dune runtest"
+      - name: Run tests
+        run: nix-shell --run "dune build @runtest --ignore-promoted-rules"
