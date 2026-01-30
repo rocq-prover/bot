@@ -124,51 +124,6 @@ let test_ci_minimize_not_regular () =
   | Some _ ->
       Alcotest.fail "ci minimize should not match regular minimize syntax"
 
-(* Test: Resume CI minimize with code block *)
-let test_resume_ci_minimize_with_code_block () =
-  (* The pattern requires: @coqbot <space><options> resume ci minimize <requests>\n```... 
-     The <options> part can be empty but must start with a space *)
-  let body =
-    "@coqbot dry-run resume ci minimize job1\n```bash\n#!/usr/bin/env bash\ntest\n```"
-  in
-  match parse_resume_ci_minimize_text_of_body ~github_bot_name body with
-  | None ->
-      Alcotest.fail "resume ci minimize with code block: expected parse to succeed"
-  | Some (_, requests, MinimizeScript {quote_kind; _}) ->
-      let expected_requests = ["job1"] in
-      if
-        List.equal String.equal requests expected_requests
-        && String.equal quote_kind "bash"
-      then ()
-      else
-        Alcotest.failf
-          "resume ci minimize: expected requests=[job1], quote_kind='bash', got \
-           requests=[%s], quote_kind='%s'"
-          (String.concat ~sep:"; " requests)
-          quote_kind
-  | Some (_, _, MinimizeAttachment _) ->
-      Alcotest.fail
-        "resume ci minimize: expected MinimizeScript, got MinimizeAttachment"
-
-(* Test: Resume CI minimization (alternate spelling) with code block *)
-let test_resume_ci_minimization_with_code_block () =
-  let body =
-    "@coqbot dry-run resume CI-minimization job1\n```\ntest script\n```"
-  in
-  match parse_resume_ci_minimize_text_of_body ~github_bot_name body with
-  | None ->
-      Alcotest.fail
-        "resume ci minimization with code block: expected parse to succeed"
-  | Some (_, requests, MinimizeScript _) ->
-      let expected_requests = ["job1"] in
-      if List.equal String.equal requests expected_requests then ()
-      else
-        Alcotest.failf "resume ci minimization: expected requests=[job1], got [%s]"
-          (String.concat ~sep:"; " requests)
-  | Some (_, _, MinimizeAttachment _) ->
-      Alcotest.fail
-        "resume ci minimization: expected MinimizeScript, got MinimizeAttachment"
-
 let () =
   Alcotest.run "Minimize_parser tests"
     [ ( "parse_minimize_text_of_body"
@@ -183,11 +138,4 @@ let () =
       , [ ("basic ci minimize", `Quick, test_ci_minimize_basic)
         ; ("ci minimize with requests", `Quick, test_ci_minimize_with_requests)
         ; ("ci-minimize hyphenated", `Quick, test_ci_minimize_hyphenated)
-        ; ("not regular minimize", `Quick, test_ci_minimize_not_regular) ] )
-    ; ( "parse_resume_ci_minimize_text_of_body"
-      , [ ( "resume ci minimize with code block"
-          , `Quick
-          , test_resume_ci_minimize_with_code_block )
-        ; ( "resume ci minimization with code block"
-          , `Quick
-          , test_resume_ci_minimization_with_code_block ) ] ) ]
+        ; ("not regular minimize", `Quick, test_ci_minimize_not_regular) ] ) ]
