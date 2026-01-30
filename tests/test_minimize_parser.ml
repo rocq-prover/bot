@@ -126,8 +126,10 @@ let test_ci_minimize_not_regular () =
 
 (* Test: Resume CI minimize with code block *)
 let test_resume_ci_minimize_with_code_block () =
+  (* The pattern requires: @coqbot <space><options> resume ci minimize <requests>\n```... 
+     The <options> part can be empty but must start with a space *)
   let body =
-    "@coqbot resume ci minimize job1\n```bash\n#!/usr/bin/env bash\ntest\n```"
+    "@coqbot dry-run resume ci minimize job1\n```bash\n#!/usr/bin/env bash\ntest\n```"
   in
   match parse_resume_ci_minimize_text_of_body ~github_bot_name body with
   | None ->
@@ -151,7 +153,7 @@ let test_resume_ci_minimize_with_code_block () =
 (* Test: Resume CI minimization (alternate spelling) with code block *)
 let test_resume_ci_minimization_with_code_block () =
   let body =
-    "@coqbot resume CI-minimization job1\n```\ntest script\n```"
+    "@coqbot dry-run resume CI-minimization job1\n```\ntest script\n```"
   in
   match parse_resume_ci_minimize_text_of_body ~github_bot_name body with
   | None ->
