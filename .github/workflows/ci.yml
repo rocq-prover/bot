@@ -15,4 +15,4 @@ jobs:
         with:
           nix_path: nixpkgs=channel:nixos-unstable
       - name: Run tests
-        run: nix-shell --run "dune build @runtest --ignore-promoted-rules"
+        run: nix-shell --run "dune build @runtest --ignore-promoted-rules --only-packages coq-bot"
