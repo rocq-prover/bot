@@ -62,9 +62,14 @@ let send_doc_url_job ~bot_info ?(fallback_artifacts = []) job_info doc_key
 
 let send_doc_url ~bot_info ~github_repo_full_name job_info =
   match (github_repo_full_name, job_info.build_name) with
-  | "rocq-prover/rocq", ("doc:refman" | "doc:ci-refman") ->
+  | "rocq-prover/rocq", "doc:refman" ->
       send_doc_url_job ~bot_info job_info "refman"
-        "_build/default/doc/refman-html/index.html"
+        ~fallback_artifacts:["_build/default/doc/refman-html/index.html"]
+        "doc/refman-html/index.html"
+  | "rocq-prover/rocq", "doc:ci-refman" ->
+      send_doc_url_job ~bot_info job_info "ci-refman"
+        ~fallback_artifacts:["_build/default/doc/refman-html/index.html"]
+        "_build_ci/refman/refman-html/index.html"
   | "rocq-prover/rocq", "doc:init" ->
       send_doc_url_job ~bot_info job_info "corelib"
         "_build/default/doc/corelib/html/index.html"
