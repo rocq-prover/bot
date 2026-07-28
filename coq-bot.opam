@@ -8,6 +8,7 @@ homepage: "https://github.com/coq/bot"
 bug-reports: "https://github.com/coq/bot/issues"
 depends: [
   "dune" {>= "2.2"}
+  "ocaml" {>= "5.2.0" & < "5.3.0"}
   "base" {>= "v0.14.0"}
   "lwt" {>= "5.6.0"}
   "cohttp-lwt" {>= "2.5.4"}

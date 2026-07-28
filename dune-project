@@ -13,6 +13,7 @@
  (synopsis "A (Coq Development Team) bot written in OCaml")
  (depends
   (dune (>= 2.2))
+  (ocaml (and (>= 5.2.0) (< 5.3.0)))
   (base (>= v0.14.0))
   (lwt (>= 5.6.0))
   (cohttp-lwt (>= 2.5.4))
@@ -33,6 +34,7 @@
  (synopsis "Building blocks to make your own bots")
  (depends
   (dune (>= 2.2))
+  (ocaml (and (>= 5.2.0) (< 5.3.0)))
   (base (>= v0.14.0))
   (lwt (>= 5.3.0))
   (cohttp-lwt (>= 2.5.4))
