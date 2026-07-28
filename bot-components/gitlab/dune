@@ -1,8 +1,10 @@
+; Schema files are checked in and used as source by graphql_ppx.
+; Normal `dune build` must not regenerate them.
+; Refresh explicitly with: dune build @update-schemas
+
 (rule
- (targets gitlab-schema.json)
+ (alias update-schemas)
  (deps (universe))
  (action
-  (with-stdout-to
-   %{targets}
-   (run get-graphql-schema https://gitlab.com/api/graphql --json)))
- (mode promote))
+  (bash
+   "get-graphql-schema https://gitlab.com/api/graphql --json > %{project_root}/bot-components/gitlab/gitlab-schema.json")))

@@ -97,10 +97,10 @@ let post_comment ~bot_info ~id ~message =
   |> send_graphql_query ~bot_info ~query
        ~parse:(Fn.compose parse unsafe_fromJson)
   >|= Result.bind ~f:(function
-        | {payload= Some {commentEdge= Some {node= Some {url}}}} ->
-            Ok url
-        | _ ->
-            Error "Error while retrieving URL of posted comment." )
+    | {payload= Some {commentEdge= Some {node= Some {url}}}} ->
+        Ok url
+    | _ ->
+        Error "Error while retrieving URL of posted comment." )
 
 let update_milestone_issue ~bot_info ~issue ~milestone =
   let open GitHub_GraphQL.UpdateMilestoneIssue in

@@ -1,10 +1,16 @@
+; Schema files are checked in and used as source by graphql_ppx.
+; Normal `dune build` must not regenerate them.
+; Refresh explicitly with: dune build @update-schemas
+;
+; These rules intentionally avoid (mode promote) and (targets ...), so they
+; are not part of the default build graph. They only run for @update-schemas.
+;
+; GitHub schema update needs bot-components/.github-token (PAT, no special
+; permission). Prefer `read-strings` so the trailing newline is ignored.
+
 (rule
- (targets github-schema.json)
+ (alias update-schemas)
  (deps ../.github-token (universe))
  (action
-  (with-stdout-to
-   %{targets}
-   (run get-graphql-schema --json --header
-     "Authorization=Bearer %{read-strings:../.github-token}"
-     https://api.github.com/graphql)))
- (mode promote))
+  (bash
+   "get-graphql-schema --json --header \"Authorization=Bearer %{read-strings:../.github-token}\" https://api.github.com/graphql > %{project_root}/bot-components/github/github-schema.json")))
