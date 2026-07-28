@@ -1,0 +1,121 @@
+- Heroku set up
+create a new account in the web
+
+papertrail to the logs (14 days)
+
+the alerts that contents errors but it is false possitive
+
+
+- settings
+reveal config vars: with secrets 
+
+The own key API to deploy to test the bot, to merge it on the master git of the bot
+
+- Git settings
+secrets and variable at API key and email of heroku (setup on api settings)
+
+deploy the bot by using the fork of it before do it on the real branch
+
+
+fork of the git to test before deloy on the master
+
+
+workflow file deploy file in the .github
+
+build the docker image locally, 
+
+
+- Github apps in git settings
+rocq-prover
+in apps: permissions and events 
+redeliver to check if the bug has been fixed
+
+to build maybe the dashboard 
+
+delivery IDs to check the logs
+
+GitHub APP Dashboard
+
+to look more history logs
+
+todo: advanced --> git logs (to make the dashboard maybe to get the logs whenever we want)
+
+the suspend of the 
+
+TODO: the dashboard of the installation of the bot. to know who is installing the bot so that we would know, ...
+
+- run-coq-minimizer:
+github actions in this repos
+
+the bot will push a new branch in the github account of the bot
+
+- can we push as a github app? 
+disable push by default
+
+add cobot-ci parameters 
+
+or move to change to use the github account instead
+
+
+the github_pat keeps reason. 
+
+github_pat: none strong
+github_install_token: string 
+
+
+if in some cases we can use the github pat, if it exists if not then fail
+
+needs: rebase label needds to be kept
+
+add auto by the bot, using some of github api, REST API (of github in the beginning), github does not check (it creates by bot)
+
+to make it more configurable
+
+to link to the documentations for the documentation changes for the doc:...
+
+- mirroring
+the webhook_github: mirror_action: hard code for a specific 
+
+security reason for this: if mirror_action configures (it will push to the config that it does not belong to the user). .toml 
+
+==> before doing the mirror bot check on the main branch, check on the config on github, match the one in gitlab, github> gitlab.
+
+mirror action on github > git
+
+check the config on gitlab to see if it is the same with the one in github
+
+- Try to have general audit (for security of the bot), to improve the current security of the bot.
+the https for instance, there are several events that does not sign, 
+
+
+
+- for webhook_gitlab does not need to sign any event
+gitlab webhooks: secret token (to sign the gitlab pipeline)
+
+- to find the way so that the bot knows the secret token of all the gitlab ???
+
+
+- Some hack account can pretend to make the bot makes the fall request is not green but makes it greens and harm the repos
+
+====
+
+- toml: default sections can be config on the repos (can be done in the toml)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
