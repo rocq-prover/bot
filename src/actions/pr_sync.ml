@@ -22,9 +22,8 @@ let update_pr ?full_ci ?(skip_author_check = false) ~bot_info
   |&& git_fetch pr_info.head.branch ("refs/heads/" ^ local_head_branch)
   |> execute_cmd
   >>= (fun () ->
-        git_make_ancestor ~pr_title:pr_info.issue.title
-          ~pr_number:pr_info.issue.number ~base:local_base_branch
-          local_head_branch )
+  git_make_ancestor ~pr_title:pr_info.issue.title
+    ~pr_number:pr_info.issue.number ~base:local_base_branch local_head_branch )
   >>= fun ok ->
   let needs_full_ci_label = "needs: full CI" in
   let rebase_label = "needs: rebase" in
@@ -116,7 +115,7 @@ let update_pr ?full_ci ?(skip_author_check = false) ~bot_info
                    if
                      pr_info.issue.labels
                      |> List.exists ~f:(fun l ->
-                            String.equal l request_full_ci_label )
+                         String.equal l request_full_ci_label )
                    then (
                      (* Full CI requested *)
                      GitHub_automation.remove_labels_if_present ~bot_info
@@ -172,28 +171,26 @@ let run_ci_action ~bot_info ~comment_info ?full_ci ~gitlab_mapping
      GitHub_queries.get_team_membership ~bot_info ~org:"rocq-prover" ~team
        ~user:comment_info.author
      >>= (fun is_member ->
-           if is_member then
-             let open Lwt.Syntax in
-             let* () = Lwt_io.printl "Authorized user: pushing to GitLab." in
-             match comment_info.pull_request with
-             | Some pr_info ->
-                 update_pr ?full_ci ~skip_author_check:true pr_info ~bot_info
-                   ~gitlab_mapping ~github_mapping
-             | None ->
-                 let {owner; repo; number} = comment_info.issue.issue in
-                 GitHub_queries.get_pull_request_refs ~bot_info ~owner ~repo
-                   ~number
-                 >>= fun pr_info ->
-                 update_pr ?full_ci ~skip_author_check:true
-                   {pr_info with issue= comment_info.issue}
-                   ~bot_info ~gitlab_mapping ~github_mapping
-           else
-             (* We inform the author of the request that they are not authorized. *)
-             GitHub_automation.inform_user_not_in_contributors ~bot_info
-               ~comment_info
-             |> Lwt_result.ok )
+     if is_member then
+       let open Lwt.Syntax in
+       let* () = Lwt_io.printl "Authorized user: pushing to GitLab." in
+       match comment_info.pull_request with
+       | Some pr_info ->
+           update_pr ?full_ci ~skip_author_check:true pr_info ~bot_info
+             ~gitlab_mapping ~github_mapping
+       | None ->
+           let {owner; repo; number} = comment_info.issue.issue in
+           GitHub_queries.get_pull_request_refs ~bot_info ~owner ~repo ~number
+           >>= fun pr_info ->
+           update_pr ?full_ci ~skip_author_check:true
+             {pr_info with issue= comment_info.issue}
+             ~bot_info ~gitlab_mapping ~github_mapping
+     else
+       (* We inform the author of the request that they are not authorized. *)
+       GitHub_automation.inform_user_not_in_contributors ~bot_info ~comment_info
+       |> Lwt_result.ok )
      |> Fn.flip Lwt_result.bind_lwt_error (fun err ->
-            Lwt_io.printf "Error: %s\n" err ) )
+         Lwt_io.printf "Error: %s\n" err ) )
     >>= fun _ -> Lwt.return_unit )
   |> Lwt.async ;
   Server.respond_string ~status:`OK

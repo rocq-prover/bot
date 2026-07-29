@@ -214,7 +214,7 @@ let run_ci_minimization ~bot_info ~comment_thread_id ~owner ~repo ~pr_number
            Lwt.return_ok ()
        | Some
            (Bot_components.Minimize_parser.MinimizeScript
-             {body= bug_file_contents} ) ->
+              {body= bug_file_contents} ) ->
            Lwt_io.write bug_file_ch bug_file_contents >>= Lwt.return_ok
        | Some (MinimizeAttachment {url}) -> (
          match parse_github_artifact_url url with
@@ -279,10 +279,10 @@ let run_ci_minimization ~bot_info ~comment_thread_id ~owner ~repo ~pr_number
   >>= fun results ->
   results
   |> List.partition_map ~f:(function
-       | target, Ok () ->
-           Either.First target
-       | target, Error f ->
-           Either.Second (target, f) )
+    | target, Ok () ->
+        Either.First target
+    | target, Error f ->
+        Either.Second (target, f) )
   |> Lwt.return_ok
 
 let ci_minimization_extract_job_specific_info ~head_pipeline_summary
@@ -456,10 +456,10 @@ let fetch_ci_minimization_info ~bot_info ~owner ~repo ~pr_number
           let head_checks_errors, head_checks = partition_errors head_checks in
           head_checks_errors
           |> Lwt_list.iter_p (fun (_, error) ->
-                 Lwt_io.printlf
-                   "Non-fatal error while looking for failed tests of PR #%d \
-                    to minimize: %s"
-                   pr_number error )
+              Lwt_io.printlf
+                "Non-fatal error while looking for failed tests of PR #%d to \
+                 minimize: %s"
+                pr_number error )
           >>= fun () ->
           let extract_pipeline_check =
             List.partition3_map ~f:(fun (check_tab_info, success) ->
@@ -525,28 +525,28 @@ let fetch_ci_minimization_info ~bot_info ~owner ~repo ~pr_number
                     then Some name
                     else None )
                 @ List.filter_map head_checks_errors ~f:(fun (name, _) ->
-                      if String_utils.string_match ~regexp:"test-suite" name
-                      then Some name
-                      else None )
+                    if String_utils.string_match ~regexp:"test-suite" name then
+                      Some name
+                    else None )
               in
               let possible_jobs_to_minimize, unminimizable_jobs =
                 head_checks
                 |> List.partition_map ~f:(fun (({name}, _) as head_check) ->
-                       match
-                         ci_minimization_extract_job_specific_info
-                           ~head_pipeline_summary ~base_pipeline_summary
-                           ~base_checks_errors ~base_checks head_check
-                       with
-                       | Error err ->
-                           Either.Second (name, err)
-                       | Ok result ->
-                           Either.First result )
+                    match
+                      ci_minimization_extract_job_specific_info
+                        ~head_pipeline_summary ~base_pipeline_summary
+                        ~base_checks_errors ~base_checks head_check
+                    with
+                    | Error err ->
+                        Either.Second (name, err)
+                    | Ok result ->
+                        Either.First result )
               in
               let unminimizable_jobs =
                 unminimizable_jobs
                 @ ( unfinished_head_checks
                   |> List.map ~f:(fun {name} ->
-                         (name, f "Job %s is still in progress." name) ) )
+                      (name, f "Job %s is still in progress." name) ) )
               in
               Lwt.return_ok
                 ( { comment_thread_id= pr_id
@@ -616,7 +616,7 @@ let fetch_ci_minimization_info ~bot_info ~owner ~repo ~pr_number
                     head
                     ( head_pipeline_checks_errors
                     |> List.map ~f:(fun (name, error) ->
-                           f "- %s: %s" name error )
+                        f "- %s: %s" name error )
                     |> String.concat ~sep:"\n" ) )
           | ( ((_, _, _), _)
             , ((None, _), ((_ :: _ :: _ as pipeline_head_checks), _, _), _) ) ->
@@ -678,7 +678,7 @@ let fetch_ci_minimization_info ~bot_info ~owner ~repo ~pr_number
                     base
                     ( base_pipeline_checks_errors
                     |> List.map ~f:(fun (name, error) ->
-                           f "- %s: %s" name error )
+                        f "- %s: %s" name error )
                     |> String.concat ~sep:"\n" ) )
           | ( (((_ :: _ :: _ as pipeline_base_checks), _, _), _)
             , ((_, _), (_, _, _), _) ) ->
@@ -721,23 +721,24 @@ let minimize_failed_tests ~bot_info ~owner ~repo ~pr_number
       let unminimizable_jobs =
         unminimizable_jobs
         |> List.sort ~compare:(fun (name1, _) (name2, _) ->
-               String.compare name1 name2 )
+            String.compare name1 name2 )
       in
       possible_jobs_to_minimize
       |> List.sort ~compare:(fun (_, info1) (_, info2) ->
-             compare_minimization_info info1 info2 )
+          compare_minimization_info info1 info2 )
       |> List.map ~f:(fun (suggestion_info, minimization_info) ->
-             (ci_minimization_suggest ~base suggestion_info, minimization_info) )
+          (ci_minimization_suggest ~base suggestion_info, minimization_info) )
       |> List.partition3_map ~f:(function
-           | Suggested, minimization_info ->
-               `Fst minimization_info
-           | Possible reason, minimization_info ->
-               `Snd (reason, minimization_info)
-           | Bad reason, minimization_info ->
-               `Trd (reason, minimization_info) )
+        | Suggested, minimization_info ->
+            `Fst minimization_info
+        | Possible reason, minimization_info ->
+            `Snd (reason, minimization_info)
+        | Bad reason, minimization_info ->
+            `Trd (reason, minimization_info) )
       |> fun ( suggested_jobs_to_minimize
              , possible_jobs_to_minimize
-             , bad_jobs_to_minimize ) ->
+             , bad_jobs_to_minimize )
+      ->
       let suggested_and_possible_jobs_to_minimize =
         suggested_jobs_to_minimize
         @ List.map
@@ -769,21 +770,22 @@ let minimize_failed_tests ~bot_info ~owner ~repo ~pr_number
         | RequestExplicit requests, _ ->
             ( suggested_and_possible_jobs_to_minimize
               |> List.filter ~f:(fun {target} ->
-                     List.exists
-                       ~f:(fun request -> String.equal target request)
-                       requests )
+                  List.exists
+                    ~f:(fun request -> String.equal target request)
+                    requests )
             , Error "the user requested an explicit list of jobs" )
       in
       ( match jobs_to_minimize with
-      | [] ->
-          Lwt_io.printlf
-            "Found no jobs to initiate CI minimization on for PR #%d" pr_number
-      | _ ->
-          Lwt_io.printlf "Initiating CI minimization for PR #%d on jobs: %s"
-            pr_number
-            ( jobs_to_minimize
-            |> List.map ~f:(fun {target} -> target)
-            |> String.concat ~sep:", " ) )
+        | [] ->
+            Lwt_io.printlf
+              "Found no jobs to initiate CI minimization on for PR #%d"
+              pr_number
+        | _ ->
+            Lwt_io.printlf "Initiating CI minimization for PR #%d on jobs: %s"
+              pr_number
+              ( jobs_to_minimize
+              |> List.map ~f:(fun {target} -> target)
+              |> String.concat ~sep:", " ) )
       >>= fun () ->
       run_ci_minimization ~bot_info ~comment_thread_id ~owner ~repo
         ~pr_number:(Int.to_string pr_number) ~base ~head
@@ -816,7 +818,7 @@ let minimize_failed_tests ~bot_info ~owner ~repo ~pr_number
                   ( "The following jobs could not be minimized:\n"
                   ^ ( unminimizable_jobs
                     |> List.map ~f:(fun (name, err) ->
-                           Printf.sprintf "- %s (%s)" name err )
+                        Printf.sprintf "- %s (%s)" name err )
                     |> String.concat ~sep:"\n" )
                   ^ "\n\n" )
           in
@@ -836,7 +838,7 @@ let minimize_failed_tests ~bot_info ~owner ~repo ~pr_number
                   ( "The following jobs were not minimized:\n"
                   ^ ( bad_jobs
                     |> List.map ~f:(fun (reason, {target}) ->
-                           Printf.sprintf "- %s because %s" target reason )
+                        Printf.sprintf "- %s because %s" target reason )
                     |> String.concat ~sep:"\n" )
                   ^ "\n\n" )
           in
@@ -860,7 +862,7 @@ let minimize_failed_tests ~bot_info ~owner ~repo ~pr_number
                   ( "I failed to trigger minimization on the following jobs:\n"
                   ^ ( jobs_that_could_not_be_minimized
                     |> List.map ~f:(fun (name, err) ->
-                           Printf.sprintf "- %s (%s)" name err )
+                        Printf.sprintf "- %s (%s)" name err )
                     |> String.concat ~sep:"\n" )
                   ^ "\n\n" )
           in
@@ -913,343 +915,349 @@ let minimize_failed_tests ~bot_info ~owner ~repo ~pr_number
                 base
           in
           ( match (request, jobs_minimized, failed_minimization_description) with
-          | RequestAll, [], None ->
-              Lwt.return_some
+            | RequestAll, [], None ->
+                Lwt.return_some
+                  ( match
+                      bad_and_unminimizable_jobs_description ~f:(fun _ -> true)
+                    with
+                  | None ->
+                      f "No valid CI jobs detected for %s.%s" head try_again_msg
+                  | Some msg ->
+                      f
+                        "I attempted to run all CI jobs at commit %s for \
+                         minimization, but was unable to find any jobs to \
+                         minimize.%s\n\n\
+                         %s"
+                        head try_again_msg msg )
+            | RequestAll, _, _ ->
                 ( match
                     bad_and_unminimizable_jobs_description ~f:(fun _ -> true)
                   with
-                | None ->
-                    f "No valid CI jobs detected for %s.%s" head try_again_msg
-                | Some msg ->
-                    f
-                      "I attempted to run all CI jobs at commit %s for \
-                       minimization, but was unable to find any jobs to \
-                       minimize.%s\n\n\
-                       %s"
-                      head try_again_msg msg )
-          | RequestAll, _, _ ->
-              ( match
-                  bad_and_unminimizable_jobs_description ~f:(fun _ -> true)
-                with
-              | Some msg ->
-                  Lwt_io.printlf
-                    "When attempting to run CI Minimization by request all on \
-                     %s/%s@%s for PR #%d:\n\
-                     %s"
-                    owner repo head pr_number msg
-              | None ->
-                  Lwt.return_unit )
-              >>= fun () ->
-              ( match jobs_minimized with
-              | [] ->
-                  f
-                    "I did not succeed at triggering minimization on any jobs \
-                     at commit %s.%s"
-                    head try_again_msg
-              | _ :: _ ->
-                  (* TODO: change https://github.com/rocq-community/run-coq-bug-minimizer/actions to a link to the particular action run when we can get that information *)
-                  f
-                    "I am now [%s \
-                     minimization](https://github.com/rocq-community/run-coq-bug-minimizer/actions) \
-                     at commit %s on %s. I'll come back to you with the \
-                     results once it's done.%s"
-                    (if Option.is_none bug_file then "running" else "resuming")
-                    head
-                    (jobs_minimized |> String.concat ~sep:", ")
-                    note_some_head_unfinished_msg )
-              ^ "\n\n"
-              ^ Option.value ~default:"" failed_minimization_description
-              |> Lwt.return_some
-          | RequestExplicit requests, _, _ ->
-              (* N.B. requests may be things like library:ci-cross_crypto,
+                  | Some msg ->
+                      Lwt_io.printlf
+                        "When attempting to run CI Minimization by request all \
+                         on %s/%s@%s for PR #%d:\n\
+                         %s"
+                        owner repo head pr_number msg
+                  | None ->
+                      Lwt.return_unit )
+                >>= fun () ->
+                ( match jobs_minimized with
+                  | [] ->
+                      f
+                        "I did not succeed at triggering minimization on any \
+                         jobs at commit %s.%s"
+                        head try_again_msg
+                  | _ :: _ ->
+                      (* TODO: change https://github.com/rocq-community/run-coq-bug-minimizer/actions to a link to the particular action run when we can get that information *)
+                      f
+                        "I am now [%s \
+                         minimization](https://github.com/rocq-community/run-coq-bug-minimizer/actions) \
+                         at commit %s on %s. I'll come back to you with the \
+                         results once it's done.%s"
+                        ( if Option.is_none bug_file then "running"
+                          else "resuming" )
+                        head
+                        (jobs_minimized |> String.concat ~sep:", ")
+                        note_some_head_unfinished_msg )
+                ^ "\n\n"
+                ^ Option.value ~default:"" failed_minimization_description
+                |> Lwt.return_some
+            | RequestExplicit requests, _, _ ->
+                (* N.B. requests may be things like library:ci-cross_crypto,
                  while the job targets are things like GitLab CI job
                  library:ci-cross_crypto (pull request) *)
-              requests
-              |> List.partition3_map ~f:(fun request ->
-                     match
-                       ( List.exists
-                           ~f:
-                             (String_utils.string_match
-                                ~regexp:(Str.quote request) )
-                           jobs_minimized
-                       , List.find
-                           ~f:(fun (target, _) ->
-                             String_utils.string_match
-                               ~regexp:(Str.quote request) target )
-                           jobs_that_could_not_be_minimized
-                       , List.find
-                           ~f:(fun (target, _) ->
-                             String_utils.string_match
-                               ~regexp:(Str.quote request) target )
-                           unminimizable_jobs
-                       , List.find
-                           ~f:(fun (_, {target}) ->
-                             String_utils.string_match
-                               ~regexp:(Str.quote request) target )
-                           bad_jobs_to_minimize )
-                     with
-                     | true, _, _, _ ->
-                         `Fst request
-                     | false, Some (target, err), _, _ ->
-                         `Snd
-                           (f "%s: failed to trigger minimization (%s)" target
-                              err )
-                     | false, None, Some (target, err), _ ->
-                         `Snd (f "%s could not be minimized (%s)" target err)
-                     | false, None, None, Some (reason, {target}) ->
-                         `Snd
-                           (f "%s was not minimized because %s" target reason)
-                     | false, None, None, None ->
-                         `Trd request )
-              |> fun ( successful_requests
-                     , unsuccessful_requests
-                     , unfound_requests ) ->
-              let unsuccessful_requests_report =
-                match unsuccessful_requests with
-                | [] ->
-                    None
-                | [msg] ->
-                    Some msg
-                | _ ->
-                    Some
-                      ( "The following requests were not fulfilled:\n"
-                      ^ ( unsuccessful_requests
-                        |> List.map ~f:(fun msg -> "- " ^ msg)
-                        |> String.concat ~sep:"\n" )
-                      ^ "\n\n" )
-              in
-              let unfound_requests_report =
-                let all_jobs =
-                  List.map
-                    ~f:(fun (target, _) -> target)
-                    jobs_that_could_not_be_minimized
-                  @ List.map ~f:(fun (target, _) -> target) unminimizable_jobs
-                  @ List.map
-                      ~f:(fun (_, {target}) -> target)
-                      bad_jobs_to_minimize
-                  |> List.sort ~compare:String.compare
+                requests
+                |> List.partition3_map ~f:(fun request ->
+                    match
+                      ( List.exists
+                          ~f:
+                            (String_utils.string_match
+                               ~regexp:(Str.quote request) )
+                          jobs_minimized
+                      , List.find
+                          ~f:(fun (target, _) ->
+                            String_utils.string_match
+                              ~regexp:(Str.quote request) target )
+                          jobs_that_could_not_be_minimized
+                      , List.find
+                          ~f:(fun (target, _) ->
+                            String_utils.string_match
+                              ~regexp:(Str.quote request) target )
+                          unminimizable_jobs
+                      , List.find
+                          ~f:(fun (_, {target}) ->
+                            String_utils.string_match
+                              ~regexp:(Str.quote request) target )
+                          bad_jobs_to_minimize )
+                    with
+                    | true, _, _, _ ->
+                        `Fst request
+                    | false, Some (target, err), _, _ ->
+                        `Snd
+                          (f "%s: failed to trigger minimization (%s)" target
+                             err )
+                    | false, None, Some (target, err), _ ->
+                        `Snd (f "%s could not be minimized (%s)" target err)
+                    | false, None, None, Some (reason, {target}) ->
+                        `Snd (f "%s was not minimized because %s" target reason)
+                    | false, None, None, None ->
+                        `Trd request )
+                |> fun ( successful_requests
+                       , unsuccessful_requests
+                       , unfound_requests )
+                ->
+                let unsuccessful_requests_report =
+                  match unsuccessful_requests with
+                  | [] ->
+                      None
+                  | [msg] ->
+                      Some msg
+                  | _ ->
+                      Some
+                        ( "The following requests were not fulfilled:\n"
+                        ^ ( unsuccessful_requests
+                          |> List.map ~f:(fun msg -> "- " ^ msg)
+                          |> String.concat ~sep:"\n" )
+                        ^ "\n\n" )
                 in
-                match unfound_requests with
-                | [] ->
-                    None
-                | [request] ->
-                    Some
-                      (f
-                         "requested target '%s' could not be found among the \
-                          jobs %s.%s"
-                         request
-                         (all_jobs |> String.concat ~sep:", ")
-                         note_some_head_unfinished_msg )
-                | _ :: _ :: _ ->
-                    Some
-                      (f
-                         "requested targets %s could not be found among the \
-                          jobs %s.%s"
-                         (unfound_requests |> String.concat ~sep:", ")
-                         (all_jobs |> String.concat ~sep:", ")
-                         note_some_head_unfinished_msg )
-              in
-              let unsuccessful_requests_report =
+                let unfound_requests_report =
+                  let all_jobs =
+                    List.map
+                      ~f:(fun (target, _) -> target)
+                      jobs_that_could_not_be_minimized
+                    @ List.map ~f:(fun (target, _) -> target) unminimizable_jobs
+                    @ List.map
+                        ~f:(fun (_, {target}) -> target)
+                        bad_jobs_to_minimize
+                    |> List.sort ~compare:String.compare
+                  in
+                  match unfound_requests with
+                  | [] ->
+                      None
+                  | [request] ->
+                      Some
+                        (f
+                           "requested target '%s' could not be found among the \
+                            jobs %s.%s"
+                           request
+                           (all_jobs |> String.concat ~sep:", ")
+                           note_some_head_unfinished_msg )
+                  | _ :: _ :: _ ->
+                      Some
+                        (f
+                           "requested targets %s could not be found among the \
+                            jobs %s.%s"
+                           (unfound_requests |> String.concat ~sep:", ")
+                           (all_jobs |> String.concat ~sep:", ")
+                           note_some_head_unfinished_msg )
+                in
+                let unsuccessful_requests_report =
+                  match
+                    (unsuccessful_requests_report, unfound_requests_report)
+                  with
+                  | None, None ->
+                      None
+                  | Some msg, None ->
+                      Some msg
+                  | None, Some msg ->
+                      Some ("The " ^ msg)
+                  | Some msg1, Some msg2 ->
+                      Some (msg1 ^ "\nAdditionally, the " ^ msg2)
+                in
+                ( match (successful_requests, unsuccessful_requests_report) with
+                  | [], None ->
+                      "No CI minimization requests made?"
+                  | [], Some msg ->
+                      "I was unable to minimize any of the CI targets that you \
+                       requested." ^ try_again_msg ^ "\n" ^ msg
+                  | _ :: _, _ ->
+                      (* TODO: change https://github.com/rocq-community/run-coq-bug-minimizer/actions to a link to the particular action run when we can get that information *)
+                      f
+                        "I am now [%s \
+                         minimization](https://github.com/rocq-community/run-coq-bug-minimizer/actions) \
+                         at commit %s on requested %s %s. I'll come back to \
+                         you with the results once it's done.%s\n\n\
+                         %s"
+                        ( if Option.is_none bug_file then "running"
+                          else "resuming" )
+                        head
+                        (pluralize "target" successful_requests)
+                        (successful_requests |> String.concat ~sep:", ")
+                        note_some_base_unfinished_msg
+                        (Option.value ~default:"" unsuccessful_requests_report)
+                  )
+                |> Lwt.return_some
+            | RequestSuggested, [], None ->
+                ( match possible_jobs_to_minimize with
+                  | [] ->
+                      f
+                        "No CI jobs are available to be minimized for commit \
+                         %s.%s"
+                        head try_again_msg
+                  | _ :: _ ->
+                      f
+                        "You requested minimization of suggested failing CI \
+                         jobs, but no jobs were suggested at commit %s. You \
+                         can trigger minimization of %s with `ci minimize all` \
+                         or by requesting some targets by name.%s"
+                        head
+                        ( possible_jobs_to_minimize
+                        |> List.map ~f:(fun (_, {target}) -> target)
+                        |> String.concat ~sep:", " )
+                        may_wish_to_wait_msg )
+                |> Lwt.return_some
+            | RequestSuggested, [], Some failed_minimization_description ->
+                f
+                  "I attempted to minimize suggested failing CI jobs at commit \
+                   %s, but was unable to succeed on any jobs.%s\n\
+                   %s"
+                  head try_again_msg failed_minimization_description
+                |> Lwt.return_some
+            | RequestSuggested, _ :: _, _ ->
+                (* TODO: change https://github.com/rocq-community/run-coq-bug-minimizer/actions to a link to the particular action run when we can get that information *)
+                f
+                  "I have [initiated \
+                   minimization](https://github.com/rocq-community/run-coq-bug-minimizer/actions) \
+                   at commit %s for the suggested %s %s as requested.%s\n\n\
+                   %s"
+                  head
+                  (pluralize "target" jobs_minimized)
+                  (jobs_minimized |> String.concat ~sep:", ")
+                  try_again_msg
+                  (Option.value ~default:"" failed_minimization_description)
+                |> Lwt.return_some
+            | Auto, jobs_minimized, failed_minimization_description -> (
+                ( match
+                    bad_and_unminimizable_jobs_description ~f:(fun _ -> true)
+                  with
+                  | Some msg ->
+                      Lwt_io.printlf
+                        "When attempting to run CI Minimization by auto on \
+                         %s/%s@%s for PR #%d:\n\
+                         %s"
+                        owner repo head pr_number msg
+                  | None ->
+                      Lwt.return_unit )
+                >>= fun () ->
+                let suggest_jobs =
+                  match suggested_jobs_to_minimize with
+                  | [] ->
+                      None
+                  | _ ->
+                      Some
+                        (f
+                           ":runner: <code>@%s ci minimize</code> will \
+                            minimize the following %s: %s"
+                           bot_info.github_name
+                           (pluralize "target" suggested_jobs_to_minimize)
+                           ( suggested_jobs_to_minimize
+                           |> List.map ~f:(fun {target} -> target)
+                           |> String.concat ~sep:", " ) )
+                in
+                let suggest_only_all_jobs =
+                  let pre_message =
+                    f
+                      "- If you tag me saying `@%s ci minimize all`, I will \
+                       additionally minimize the following %s (which I do not \
+                       suggest minimizing):"
+                      bot_info.github_name
+                      (pluralize "target" possible_jobs_to_minimize)
+                  in
+                  match possible_jobs_to_minimize with
+                  | [] ->
+                      None
+                  | [(reason, {target})] ->
+                      Some
+                        (f "%s %s (because %s)\n\n\n" pre_message target reason)
+                  | _ ->
+                      Some
+                        (f "%s\n%s\n\n\n" pre_message
+                           ( possible_jobs_to_minimize
+                           |> List.map ~f:(fun (reason, {target}) ->
+                               f "  - %s (because %s)" target reason )
+                           |> String.concat ~sep:"\n" ) )
+                in
                 match
-                  (unsuccessful_requests_report, unfound_requests_report)
+                  ( jobs_minimized
+                  , failed_minimization_description
+                  , suggest_jobs
+                  , suggest_only_all_jobs
+                  , suggest_minimization )
                 with
-                | None, None ->
-                    None
-                | Some msg, None ->
-                    Some msg
-                | None, Some msg ->
-                    Some ("The " ^ msg)
-                | Some msg1, Some msg2 ->
-                    Some (msg1 ^ "\nAdditionally, the " ^ msg2)
-              in
-              ( match (successful_requests, unsuccessful_requests_report) with
-              | [], None ->
-                  "No CI minimization requests made?"
-              | [], Some msg ->
-                  "I was unable to minimize any of the CI targets that you \
-                   requested." ^ try_again_msg ^ "\n" ^ msg
-              | _ :: _, _ ->
-                  (* TODO: change https://github.com/rocq-community/run-coq-bug-minimizer/actions to a link to the particular action run when we can get that information *)
-                  f
-                    "I am now [%s \
-                     minimization](https://github.com/rocq-community/run-coq-bug-minimizer/actions) \
-                     at commit %s on requested %s %s. I'll come back to you \
-                     with the results once it's done.%s\n\n\
-                     %s"
-                    (if Option.is_none bug_file then "running" else "resuming")
-                    head
-                    (pluralize "target" successful_requests)
-                    (successful_requests |> String.concat ~sep:", ")
-                    note_some_base_unfinished_msg
-                    (Option.value ~default:"" unsuccessful_requests_report) )
-              |> Lwt.return_some
-          | RequestSuggested, [], None ->
-              ( match possible_jobs_to_minimize with
-              | [] ->
-                  f "No CI jobs are available to be minimized for commit %s.%s"
-                    head try_again_msg
-              | _ :: _ ->
-                  f
-                    "You requested minimization of suggested failing CI jobs, \
-                     but no jobs were suggested at commit %s. You can trigger \
-                     minimization of %s with `ci minimize all` or by \
-                     requesting some targets by name.%s"
-                    head
-                    ( possible_jobs_to_minimize
-                    |> List.map ~f:(fun (_, {target}) -> target)
-                    |> String.concat ~sep:", " )
-                    may_wish_to_wait_msg )
-              |> Lwt.return_some
-          | RequestSuggested, [], Some failed_minimization_description ->
-              f
-                "I attempted to minimize suggested failing CI jobs at commit \
-                 %s, but was unable to succeed on any jobs.%s\n\
-                 %s"
-                head try_again_msg failed_minimization_description
-              |> Lwt.return_some
-          | RequestSuggested, _ :: _, _ ->
-              (* TODO: change https://github.com/rocq-community/run-coq-bug-minimizer/actions to a link to the particular action run when we can get that information *)
-              f
-                "I have [initiated \
-                 minimization](https://github.com/rocq-community/run-coq-bug-minimizer/actions) \
-                 at commit %s for the suggested %s %s as requested.%s\n\n\
-                 %s"
-                head
-                (pluralize "target" jobs_minimized)
-                (jobs_minimized |> String.concat ~sep:", ")
-                try_again_msg
-                (Option.value ~default:"" failed_minimization_description)
-              |> Lwt.return_some
-          | Auto, jobs_minimized, failed_minimization_description -> (
-              ( match
-                  bad_and_unminimizable_jobs_description ~f:(fun _ -> true)
-                with
-              | Some msg ->
-                  Lwt_io.printlf
-                    "When attempting to run CI Minimization by auto on \
-                     %s/%s@%s for PR #%d:\n\
-                     %s"
-                    owner repo head pr_number msg
-              | None ->
-                  Lwt.return_unit )
-              >>= fun () ->
-              let suggest_jobs =
-                match suggested_jobs_to_minimize with
-                | [] ->
-                    None
-                | _ ->
-                    Some
-                      (f
-                         ":runner: <code>@%s ci minimize</code> will minimize \
-                          the following %s: %s"
-                         bot_info.github_name
-                         (pluralize "target" suggested_jobs_to_minimize)
-                         ( suggested_jobs_to_minimize
-                         |> List.map ~f:(fun {target} -> target)
-                         |> String.concat ~sep:", " ) )
-              in
-              let suggest_only_all_jobs =
-                let pre_message =
-                  f
-                    "- If you tag me saying `@%s ci minimize all`, I will \
-                     additionally minimize the following %s (which I do not \
-                     suggest minimizing):"
-                    bot_info.github_name
-                    (pluralize "target" possible_jobs_to_minimize)
-                in
-                match possible_jobs_to_minimize with
-                | [] ->
-                    None
-                | [(reason, {target})] ->
-                    Some
-                      (f "%s %s (because %s)\n\n\n" pre_message target reason)
-                | _ ->
-                    Some
-                      (f "%s\n%s\n\n\n" pre_message
-                         ( possible_jobs_to_minimize
-                         |> List.map ~f:(fun (reason, {target}) ->
-                                f "  - %s (because %s)" target reason )
-                         |> String.concat ~sep:"\n" ) )
-              in
-              match
-                ( jobs_minimized
-                , failed_minimization_description
-                , suggest_jobs
-                , suggest_only_all_jobs
-                , suggest_minimization )
-              with
-              | [], None, None, None, _ ->
-                  Lwt_io.printlf
-                    "No candidates found for minimization on %s/%s@%s for PR \
-                     #%d."
-                    owner repo head pr_number
-                  >>= fun () -> Lwt.return_none
-              | [], None, None, Some msg, _ ->
-                  Lwt_io.printlf
-                    "No suggested candidates found for minimization on \
-                     %s/%s@%s for PR #%d:\n\
-                     %s"
-                    owner repo head pr_number msg
-                  >>= fun () -> Lwt.return_none
-              | [], None, Some suggestion_msg, _, Error reason ->
-                  Lwt_io.printlf
-                    "Candidates found for minimization on %s/%s@%s for PR #%d, \
-                     but I am not commenting because minimization is not \
-                     suggested because %s:\n\
-                     %s\n\
-                     %s"
-                    owner repo head pr_number reason suggestion_msg
-                    (Option.value ~default:"" suggest_only_all_jobs)
-                  >>= fun () -> Lwt.return_none
-              | [], Some failed_minimization_description, _, _, _ ->
-                  Lwt_io.printlf
-                    "Candidates found for auto minimization on %s/%s@%s for PR \
-                     #%d, but all attempts to trigger minimization failed:\n\
-                     %s"
-                    owner repo head pr_number failed_minimization_description
-                  >>= fun () -> Lwt.return_none
-              | [], None, Some suggestion_msg, _, Ok () ->
-                  f
-                    ":red_circle: CI %s at commit %s without any failure in \
-                     the test-suite\n\n\
-                     :heavy_check_mark: Corresponding %s for the base commit \
-                     %s succeeded\n\n\
-                     :grey_question: Ask me to try to extract %s that can be \
-                     added to the test-suite\n\n\
-                     <details><summary>%s</summary>\n\n\
-                     - You can also pass me a specific list of targets to \
-                     minimize as arguments.\n\
-                     %s\n\
-                     </details>%s"
-                    (pluralize "failure" suggested_jobs_to_minimize)
-                    head
-                    (pluralize "job" suggested_jobs_to_minimize)
-                    base
-                    (pluralize "a minimal test case"
-                       ~plural:"minimal test cases" suggested_jobs_to_minimize )
-                    suggestion_msg
-                    (Option.value ~default:"" suggest_only_all_jobs)
-                    may_wish_to_wait_msg
-                  |> Lwt.return_some
-              | _ :: _, _, _, _, _ ->
-                  f
-                    ":red_circle: CI %s at commit %s without any failure in \
-                     the test-suite\n\n\
-                     :heavy_check_mark: Corresponding %s for the base commit \
-                     %s succeeded\n\n\
-                     <details><summary>:runner: I have automatically started \
-                     minimization for %s to augment the test-suite</summary>\n\n\
-                     - You can also pass me a specific list of targets to \
-                     minimize as arguments.\n\
-                     %s\n\
-                     </details>"
-                    (pluralize "failure" jobs_minimized)
-                    head
-                    (pluralize "job" jobs_minimized)
-                    base
-                    (jobs_minimized |> String.concat ~sep:", ")
-                    (Option.value ~default:"" suggest_only_all_jobs)
-                  |> Lwt.return_some ) )
+                | [], None, None, None, _ ->
+                    Lwt_io.printlf
+                      "No candidates found for minimization on %s/%s@%s for PR \
+                       #%d."
+                      owner repo head pr_number
+                    >>= fun () -> Lwt.return_none
+                | [], None, None, Some msg, _ ->
+                    Lwt_io.printlf
+                      "No suggested candidates found for minimization on \
+                       %s/%s@%s for PR #%d:\n\
+                       %s"
+                      owner repo head pr_number msg
+                    >>= fun () -> Lwt.return_none
+                | [], None, Some suggestion_msg, _, Error reason ->
+                    Lwt_io.printlf
+                      "Candidates found for minimization on %s/%s@%s for PR \
+                       #%d, but I am not commenting because minimization is \
+                       not suggested because %s:\n\
+                       %s\n\
+                       %s"
+                      owner repo head pr_number reason suggestion_msg
+                      (Option.value ~default:"" suggest_only_all_jobs)
+                    >>= fun () -> Lwt.return_none
+                | [], Some failed_minimization_description, _, _, _ ->
+                    Lwt_io.printlf
+                      "Candidates found for auto minimization on %s/%s@%s for \
+                       PR #%d, but all attempts to trigger minimization failed:\n\
+                       %s"
+                      owner repo head pr_number failed_minimization_description
+                    >>= fun () -> Lwt.return_none
+                | [], None, Some suggestion_msg, _, Ok () ->
+                    f
+                      ":red_circle: CI %s at commit %s without any failure in \
+                       the test-suite\n\n\
+                       :heavy_check_mark: Corresponding %s for the base commit \
+                       %s succeeded\n\n\
+                       :grey_question: Ask me to try to extract %s that can be \
+                       added to the test-suite\n\n\
+                       <details><summary>%s</summary>\n\n\
+                       - You can also pass me a specific list of targets to \
+                       minimize as arguments.\n\
+                       %s\n\
+                       </details>%s"
+                      (pluralize "failure" suggested_jobs_to_minimize)
+                      head
+                      (pluralize "job" suggested_jobs_to_minimize)
+                      base
+                      (pluralize "a minimal test case"
+                         ~plural:"minimal test cases" suggested_jobs_to_minimize )
+                      suggestion_msg
+                      (Option.value ~default:"" suggest_only_all_jobs)
+                      may_wish_to_wait_msg
+                    |> Lwt.return_some
+                | _ :: _, _, _, _, _ ->
+                    f
+                      ":red_circle: CI %s at commit %s without any failure in \
+                       the test-suite\n\n\
+                       :heavy_check_mark: Corresponding %s for the base commit \
+                       %s succeeded\n\n\
+                       <details><summary>:runner: I have automatically started \
+                       minimization for %s to augment the \
+                       test-suite</summary>\n\n\
+                       - You can also pass me a specific list of targets to \
+                       minimize as arguments.\n\
+                       %s\n\
+                       </details>"
+                      (pluralize "failure" jobs_minimized)
+                      head
+                      (pluralize "job" jobs_minimized)
+                      base
+                      (jobs_minimized |> String.concat ~sep:", ")
+                      (Option.value ~default:"" suggest_only_all_jobs)
+                    |> Lwt.return_some ) )
           >>= function
           | Some message ->
               Bot_components.GitHub_mutations.post_comment ~id:comment_thread_id
@@ -1315,29 +1323,29 @@ let run_coq_minimizer ~bot_info ~script ~comment_thread_id ~comment_author
     (String.concat ~sep:" " minimizer_extra_arguments)
   >>= fun () ->
   ( match script with
-  | Bot_components.Minimize_parser.MinimizeScript {quote_kind; body} ->
-      if
-        List.mem ~equal:String.equal
-          ["shell"; "sh"; "shell-script"; "bash"; "zsh"]
-          (String.lowercase quote_kind)
-        || String.is_prefix ~prefix:"#!" body
-      then
-        Lwt_io.printlf "Assuming script (quote_kind: %s) is a shell script"
-          quote_kind
-        >>= fun () -> Lwt.return body
-      else
-        Lwt_io.printlf "Assuming script (quote_kind: %s) is a .v file"
-          quote_kind
-        >>= fun () ->
-        let fname = "thebug.v" in
+    | Bot_components.Minimize_parser.MinimizeScript {quote_kind; body} ->
+        if
+          List.mem ~equal:String.equal
+            ["shell"; "sh"; "shell-script"; "bash"; "zsh"]
+            (String.lowercase quote_kind)
+          || String.is_prefix ~prefix:"#!" body
+        then
+          Lwt_io.printlf "Assuming script (quote_kind: %s) is a shell script"
+            quote_kind
+          >>= fun () -> Lwt.return body
+        else
+          Lwt_io.printlf "Assuming script (quote_kind: %s) is a .v file"
+            quote_kind
+          >>= fun () ->
+          let fname = "thebug.v" in
+          Lwt.return
+            (f "#!/usr/bin/env bash\ncat > %s <<'EOF'\n%s\nEOF\ncoqc -q %s"
+               fname body fname )
+    | Bot_components.Minimize_parser.MinimizeAttachment {description; url} ->
         Lwt.return
-          (f "#!/usr/bin/env bash\ncat > %s <<'EOF'\n%s\nEOF\ncoqc -q %s" fname
-             body fname )
-  | Bot_components.Minimize_parser.MinimizeAttachment {description; url} ->
-      Lwt.return
-        ( "#!/usr/bin/env bash\n"
-        ^ Stdlib.Filename.quote_command "./handle-web-file.sh" [description; url]
-        ) )
+          ( "#!/usr/bin/env bash\n"
+          ^ Stdlib.Filename.quote_command "./handle-web-file.sh"
+              [description; url] ) )
   >>= fun script ->
   Coq.git_coq_bug_minimizer ~bot_info ~script ~comment_thread_id ~comment_author
     ~owner ~repo ~coq_version ~ocaml_version ~minimizer_extra_arguments
@@ -1360,7 +1368,8 @@ let run_coq_minimizer ~bot_info ~script ~comment_thread_id ~comment_author
           (f
              "Error encountered when attempting to start the coq bug minimizer:\n\
               %s\n\n\
-              cc @JasonGross" e )
+              cc @JasonGross"
+             e )
         ~bot_info
       >>= Utils.report_on_posting_comment
 
@@ -1451,16 +1460,16 @@ let coq_bug_minimizer_resume_ci_minimization_action ~bot_info ~key ~app_id body
                      message
                | Ok (jobs_minimized, jobs_that_could_not_be_minimized) -> (
                    ( match jobs_minimized with
-                   | [] ->
-                       Lwt.return_unit
-                   | _ ->
-                       Lwt_io.printlf "Resuming minimization of %s"
-                         (jobs_minimized |> String.concat ~sep:", ") )
+                     | [] ->
+                         Lwt.return_unit
+                     | _ ->
+                         Lwt_io.printlf "Resuming minimization of %s"
+                           (jobs_minimized |> String.concat ~sep:", ") )
                    >>= fun () ->
                    match
                      jobs_that_could_not_be_minimized
                      |> List.map ~f:(fun (job, reason) ->
-                            f "%s because %s" job reason )
+                         f "%s because %s" job reason )
                    with
                    | [] ->
                        Lwt.return_unit

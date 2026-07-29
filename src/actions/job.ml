@@ -34,17 +34,28 @@ let job_action ~bot_info
             let summary_builder, allow_failure_handler =
               if String.equal github_repo_full_name "rocq-prover/rocq" then
                 ( Job_status_rocq.rocq_summary_builder
-                , fun ~bot_info ~job_name ~job_url ~pr_num ~head_commit
-                      (gh_owner, gh_repo) ~gitlab_repo_full_name ->
+                , fun ~bot_info
+                    ~job_name
+                    ~job_url
+                    ~pr_num
+                    ~head_commit
+                    (gh_owner, gh_repo)
+                    ~gitlab_repo_full_name
+                  ->
                     Job_status_rocq.handle_rocq_allow_failure ~bot_info
                       ~job_name ~job_url ~pr_num ~head_commit
                       (gh_owner, gh_repo) ~gitlab_repo_full_name )
               else
                 ( (fun _trace_lines trace_description ->
                     Lwt.return trace_description )
-                , fun ~bot_info:_ ~job_name:_ ~job_url:_ ~pr_num:_
-                      ~head_commit:_ _ ~gitlab_repo_full_name:_ ->
-                    Lwt.return_unit )
+                , fun ~bot_info:_
+                    ~job_name:_
+                    ~job_url:_
+                    ~pr_num:_
+                    ~head_commit:_
+                    _
+                    ~gitlab_repo_full_name:_
+                  -> Lwt.return_unit )
             in
             Job_status.job_failure ~bot_info job_info ~pr_num
               (gh_owner, gh_repo) ~gitlab_domain ~gitlab_repo_full_name ~context

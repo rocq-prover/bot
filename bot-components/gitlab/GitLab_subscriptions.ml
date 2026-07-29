@@ -18,10 +18,10 @@ let extract_commit json =
        is present and represents the sha. *)
     ( None
     , ( match commit_json |> member "sha" with
-      | `Null ->
-          commit_json |> member "id"
-      | sha ->
-          sha )
+        | `Null ->
+            commit_json |> member "id"
+        | sha ->
+            sha )
       |> to_string )
 
 let job_info_of_json json =
@@ -78,9 +78,9 @@ let pipeline_info_of_json json =
   let variables =
     pipeline_json |> member "variables" |> to_list
     |> List.map ~f:(fun variable ->
-           let key = variable |> member "key" |> to_string in
-           let value = variable |> member "value" |> to_string in
-           (key, value) )
+        let key = variable |> member "key" |> to_string in
+        let value = variable |> member "value" |> to_string in
+        (key, value) )
   in
   let stages =
     pipeline_json |> member "stages" |> to_list |> List.map ~f:to_string
@@ -112,11 +112,11 @@ let gitlab_event ~event json =
 let receive_gitlab ~secret headers body =
   let open Result in
   ( match Header.get headers "X-Gitlab-Token" with
-  | Some header_secret ->
-      if Eqaf.equal secret header_secret then return true
-      else Error "Webhook password mismatch."
-  | None ->
-      return false )
+    | Some header_secret ->
+        if Eqaf.equal secret header_secret then return true
+        else Error "Webhook password mismatch."
+    | None ->
+        return false )
   >>= fun signed ->
   match Header.get headers "X-Gitlab-Event" with
   | Some event -> (

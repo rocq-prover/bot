@@ -47,6 +47,10 @@ let git_run_ci_minimization ~bot_info ~comment_thread_id ~owner ~repo ~pr_number
     ; head
     ; String.concat ~sep:" " minimizer_extra_arguments ]
   @
-  match bug_file_name with Some bug_file_name -> [bug_file_name] | None -> [] )
+  match bug_file_name with
+  | Some bug_file_name ->
+      [bug_file_name]
+  | None ->
+      [] )
   |> Stdlib.Filename.quote_command "./run_ci_minimization.sh"
   |> execute_cmd ~mask:[github_pat]

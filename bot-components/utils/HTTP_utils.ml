@@ -113,20 +113,19 @@ let handle_zip action body =
       >>= fun () ->
       Lwt_io.close tmp_channel
       >>= Lwt_preemptive.detach (fun () ->
-              try
-                let zip_entries =
-                  let zf = Zip.open_in tmp_name in
-                  let entries =
-                    Zip.entries zf
-                    |> List.filter ~f:(fun entry -> not entry.is_directory)
-                    |> List.map ~f:(fun entry ->
-                           (entry, Zip.read_entry zf entry) )
-                  in
-                  Zip.close_in zf ; entries
-                in
-                Ok zip_entries
-              with Zip.Error (zip_name, entry_name, message) ->
-                Error (f "Zip.Error(%s, %s, %s)" zip_name entry_name message) ) )
+          try
+            let zip_entries =
+              let zf = Zip.open_in tmp_name in
+              let entries =
+                Zip.entries zf
+                |> List.filter ~f:(fun entry -> not entry.is_directory)
+                |> List.map ~f:(fun entry -> (entry, Zip.read_entry zf entry))
+              in
+              Zip.close_in zf ; entries
+            in
+            Ok zip_entries
+          with Zip.Error (zip_name, entry_name, message) ->
+            Error (f "Zip.Error(%s, %s, %s)" zip_name entry_name message) ) )
   >|= action
 
 (******************************************************************************)
