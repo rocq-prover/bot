@@ -1,0 +1,79 @@
+open Base
+open Alcotest
+
+let parse s = Repo_config.make_repo_config_table (Utils.toml_of_string s)
+
+let test_full_config () =
+  let toml =
+    {|
+    [repositories.rocq]
+    github = "rocq-prover/rocq"
+    gitlab_domain = "gitlab.inria.fr"
+    gitlab_owner = "coq"
+    gitlab_repo = "coq"
+    github_project_number = 11
+    github_installation_id = 1062161
+    org_name = "rocq-prover"
+    team_name = "contributors"
+    pushers_team = "pushers"
+    maintainers_team = "coqbot-maintainers"
+    minimizer_url = "https://example.com"
+
+    [repositories.rocq.jobs]
+    bench = "bench"
+    custom_job_status = true
+    doc_jobs = ["doc:refman", "doc:stdlib"]
+    |}
+  in
+  let tbl = parse toml in
+  match Repo_config.find_by_github ~owner:"rocq-prover" ~repo:"rocq" tbl with
+  | None ->
+      fail "expected config"
+  | Some cfg ->
+      (check int) "project" 11 (Option.value_exn cfg.github_project_number) ;
+      (check (option string)) "bench" (Some "bench") cfg.jobs.bench ;
+      (check bool) "custom" true cfg.jobs.custom_job_status ;
+      (check int) "doc_jobs" 2 (List.length cfg.jobs.doc_jobs)
+
+let test_minimal_config () =
+  let tbl = parse {|
+  [repositories.demo]
+  github = "my-org/my-repo"
+  |} in
+  match Repo_config.find_by_github ~owner:"my-org" ~repo:"my-repo" tbl with
+  | None ->
+      fail "expected config"
+  | Some cfg ->
+      (check (option int)) "project" None cfg.github_project_number ;
+      (check bool) "custom" false cfg.jobs.custom_job_status ;
+      (check (list string)) "doc_jobs" [] cfg.jobs.doc_jobs
+
+let test_bad_github () =
+  check_raises "bad github"
+    (Failure "repositories.demo: 'github' must be 'owner/repo', got 'bad'")
+    (fun () -> ignore (parse {|
+  [repositories.demo]
+  github = "bad"
+  |} ) )
+
+let test_missing_section () =
+  let tbl = parse "" in
+  (check int) "empty" 0 (Hashtbl.length tbl)
+
+let test_find_miss () =
+  let tbl = parse {|
+  [repositories.demo]
+  github = "my-org/my-repo"
+|} in
+  (check bool) "miss" true
+    (Option.is_none
+       (Repo_config.find_by_github ~owner:"other" ~repo:"repo" tbl) )
+
+let () =
+  run "Repo_config tests"
+    [ ( "parse"
+      , [ ("full config", `Quick, test_full_config)
+        ; ("minimal config", `Quick, test_minimal_config)
+        ; ("bad github", `Quick, test_bad_github)
+        ; ("missing section", `Quick, test_missing_section)
+        ; ("find miss", `Quick, test_find_miss) ] ) ]
