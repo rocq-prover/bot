@@ -40,7 +40,7 @@ app_id="31373"
   gitlab_domain="gitlab.inria.fr"
 
 [repositories]
- [repositories.roqc]
+ [repositories.rocq]
  github = "rocq-prover/rocq"
  gitlab_domain = "gitlab.inria.fr"
  gitlab_owner = "coq"
@@ -49,7 +49,7 @@ app_id="31373"
  github_installation_id = 1062161
  org_name = "rocq-prover"
  team_name = "contributors"
- pushers_name = "pushers"
+ pushers_team = "pushers"
  maintainers_team = "coqbot-maintainers"
  minimizer_url = "https://github.com/rocq-community/run-coq-bug-minimizer/actions"
 
