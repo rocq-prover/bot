@@ -38,3 +38,25 @@ app_id="31373"
   github="math-comp/docker-mathcomp"
   gitlab="math-comp/docker-mathcomp"
   gitlab_domain="gitlab.inria.fr"
+
+[repositories]
+ [repositories.roqc]
+ github = "rocq-prover/rocq"
+ gitlab_domain = "gitlab.inria.fr"
+ gitlab_owner = "coq"
+ gitlab_repo = "coq"
+ github_project_number = 11
+ github_installation_id = 1062161
+ org_name = "rocq-prover"
+ team_name = "contributors"
+ pushers_name = "pushers"
+ maintainers_team = "coqbot-maintainers"
+ minimizer_url = "https://github.com/rocq-community/run-coq-bug-minimizer/actions"
+
+ [repositories.rocq.jobs]
+ bench = "bench"
+ custom_job_status = true
+ doc_jobs = [
+  "doc:refman", "doc:ci-refman", "doc:init",
+  "doc:stdlib", "doc:stdlib:dune", "doc:ml-api:odoc"
+ ]
