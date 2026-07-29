@@ -1,7 +1,7 @@
 (rule
  (alias update-github-schema)
  (targets github-schema.json)
- (deps ../.github-token (universe))
+ (deps ../.github-token)
  (action
   (with-stdout-to
    %{targets}
