@@ -120,24 +120,18 @@ let handle_comment_created ~bot_info ~key ~app_id ~github_bot_name
        None
     in
 
-    let parse_bench_native body =
-      if
-        string_match
-          ~regexp:(f "@%s:? [Bb]ench native" @@ Str.quote github_bot_name)
-          body
-      then
-        Some `BenchNative
-      else
-        None
-    in
-
     let parse_bench body =
       if
         string_match
-          ~regexp:(f "@%s:? [Bb]ench" @@ Str.quote github_bot_name)
+          ~regexp:(f {|@%s:? [Bb]ench\( *$\| +\([^\n]+\) *\(\n\|$\)\)|} @@ Str.quote github_bot_name)
           body
       then
-        Some `Bench
+        match Str.matched_group 2 body with
+        | exception _ -> Some (`Bench [])
+        | args ->
+          match parse_key_value_arguments args with
+          | Result.Ok args -> Some (`Bench args)
+          | _ -> None
       else
         None
     in
@@ -158,7 +152,6 @@ let handle_comment_created ~bot_info ~key ~app_id ~github_bot_name
         (fun body -> ci_minimize_text_of_body body >>| fun x -> `Minimize x);
         parse_run_ci;
         parse_merge;
-        parse_bench_native;
         parse_bench
       ]
     in
@@ -227,15 +220,20 @@ let handle_comment_created ~bot_info ~key ~app_id ~github_bot_name
       Server.respond_string ~status:`OK
         ~body:(f "Received a request to start the bench.")
         ()
-    | Some `Bench when
+    | Some (`Bench args) when
             comment_info.issue.pull_request
             && String.equal comment_info.issue.issue.owner "rocq-prover"
             && String.equal comment_info.issue.issue.repo "rocq"
             && Option.is_some install_id ->
+      let key_value_pairs = List.map ~f:(fun (k,v) -> (k, Option.value ~default:"yes" v)) args in
       (fun () ->
          Bot_components.Github_installations.action_as_github_app ~bot_info
            ~key ~app_id ~owner:comment_info.issue.issue.owner
-           (fun ~bot_info -> Bench.run_bench ~bot_info comment_info ) )
+           (fun ~bot_info ->
+              Bench.run_bench ~bot_info
+                ~key_value_pairs
+                comment_info )
+      )
       |> Lwt.async ;
       Server.respond_string ~status:`OK
         ~body:(f "Received a request to start the bench.")
