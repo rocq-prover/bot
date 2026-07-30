@@ -14,5 +14,5 @@ jobs:
       - uses: cachix/install-nix-action@v27
         with:
           nix_path: nixpkgs=channel:nixos-unstable
-      - name: Run tests
-        run: nix-shell --run "dune build @tests/runtest"
+      - name: Check formatting and run tests
+        run: nix-shell --run "dune build @fmt && dune build @tests/runtest"
