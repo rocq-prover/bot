@@ -33,6 +33,13 @@ let key_bool toml_table k =
   | None ->
       key_value toml_table k |> Option.map ~f:Bool.of_string
 
+let key_int tbl k =
+  match Toml.Lenses.(get tbl (key k |-- int)) with
+  | Some i ->
+      Some i
+  | None ->
+      key_value tbl k |> Option.map ~f:Int.of_string
+
 let find k toml_table =
   Toml.Types.Table.find (Toml.Types.Table.Key.of_string k) toml_table
 

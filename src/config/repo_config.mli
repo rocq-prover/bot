@@ -1,5 +1,11 @@
 type repo_jobs_config =
-  {bench: string option; custom_job_status: bool; doc_jobs: string list}
+  { bench_job: string option
+  ; use_rocq_job_status: bool
+  ; doc_artifact_jobs: string list }
+
+type backport_config = {github_project_number: int option}
+
+type team_permission = {team_name: string; permission: string}
 
 type t =
   { github_owner: string
@@ -7,12 +13,11 @@ type t =
   ; gitlab_domain: string option
   ; gitlab_owner: string option
   ; gitlab_repo: string option
-  ; github_project_number: int option
+  ; backporting: backport_config
   ; github_installation_id: int option
   ; org_name: string option
-  ; team_name: string option
-  ; pushers_team: string option
-  ; maintainers_team: string option
+  ; alert_mention: string option
+  ; teams: team_permission list
   ; minimizer_url: string option
   ; jobs: repo_jobs_config }
 

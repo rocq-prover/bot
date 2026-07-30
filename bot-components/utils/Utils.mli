@@ -17,6 +17,8 @@ val key_array : Toml.Types.table -> string -> string list option
 
 val key_bool : Toml.Types.table -> string -> bool option
 
+val key_int : Toml.Types.table -> string -> int option
+
 val find : string -> Toml.Types.table -> Toml.Types.value
 
 val list_table_keys : Toml.Types.table -> string list

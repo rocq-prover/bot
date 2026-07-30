@@ -2,7 +2,13 @@ open Base
 open Utils
 
 type repo_jobs_config =
-  {bench: string option; custom_job_status: bool; doc_jobs: string list}
+  { bench_job: string option
+  ; use_rocq_job_status: bool
+  ; doc_artifact_jobs: string list }
+
+type backport_config = {github_project_number: int option}
+
+type team_permission = {team_name: string; permission: string}
 
 type t =
   { github_owner: string
@@ -10,29 +16,55 @@ type t =
   ; gitlab_domain: string option
   ; gitlab_owner: string option
   ; gitlab_repo: string option
-  ; github_project_number: int option
+  ; backporting: backport_config
   ; github_installation_id: int option
   ; org_name: string option
-  ; team_name: string option
-  ; pushers_team: string option
-  ; maintainers_team: string option
+  ; alert_mention: string option
+  ; teams: team_permission list
   ; minimizer_url: string option
   ; jobs: repo_jobs_config }
 
-let default_jobs = {bench= None; custom_job_status= false; doc_jobs= []}
+let default_jobs =
+  {bench_job= None; use_rocq_job_status= false; doc_artifact_jobs= []}
+
+let default_backporting = {github_project_number= None}
 
 let parse_jobs tbl key =
   match subkey_table tbl key "jobs" with
   | None ->
       default_jobs
   | Some jobs_tbl ->
-      { bench=
-          key_value jobs_tbl "bench"
+      { bench_job=
+          key_value jobs_tbl "bench_job"
           |> Option.bind ~f:(fun s ->
               if String.is_empty s then None else Some s )
-      ; custom_job_status=
-          key_bool jobs_tbl "custom_job_status" |> Option.value ~default:false
-      ; doc_jobs= key_array jobs_tbl "doc_jobs" |> Option.value ~default:[] }
+      ; use_rocq_job_status=
+          key_bool jobs_tbl "use_rocq_job_status" |> Option.value ~default:false
+      ; doc_artifact_jobs=
+          key_array jobs_tbl "doc_artifact_jobs" |> Option.value ~default:[] }
+
+let parse_backporting tbl key =
+  match subkey_table tbl key "backporting" with
+  | None ->
+      default_backporting
+  | Some bp_tbl ->
+      {github_project_number= key_int bp_tbl "github_project_number"}
+
+let parse_teams tbl k =
+  match
+    Toml.Lenses.(get tbl (key k |-- table |-- key "teams" |-- array |-- tables))
+  with
+  | None ->
+      []
+  | Some team_tables ->
+      List.filter_map team_tables ~f:(fun team_tbl ->
+          match
+            (key_value team_tbl "team_name", key_value team_tbl "permission")
+          with
+          | Some team_name, Some permission ->
+              Some {team_name; permission}
+          | _ ->
+              None )
 
 let parse_one tbl key =
   match subkey_value tbl key "github" with
@@ -47,12 +79,11 @@ let parse_one tbl key =
           ; gitlab_domain= subkey_value tbl key "gitlab_domain"
           ; gitlab_owner= subkey_value tbl key "gitlab_owner"
           ; gitlab_repo= subkey_value tbl key "gitlab_repo"
-          ; github_project_number= subkey_int tbl key "github_project_number"
+          ; backporting= parse_backporting tbl key
           ; github_installation_id= subkey_int tbl key "github_installation_id"
           ; org_name= subkey_value tbl key "org_name"
-          ; team_name= subkey_value tbl key "team_name"
-          ; pushers_team= subkey_value tbl key "pushers_team"
-          ; maintainers_team= subkey_value tbl key "maintainers_team"
+          ; alert_mention= subkey_value tbl key "alert_mention"
+          ; teams= parse_teams tbl key
           ; minimizer_url= subkey_value tbl key "minimizer_url"
           ; jobs= parse_jobs tbl key }
       | _ ->

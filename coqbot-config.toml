@@ -45,18 +45,30 @@ app_id="31373"
  gitlab_domain = "gitlab.inria.fr"
  gitlab_owner = "coq"
  gitlab_repo = "coq"
- github_project_number = 11
  github_installation_id = 1062161
  org_name = "rocq-prover"
- team_name = "contributors"
- pushers_team = "pushers"
- maintainers_team = "coqbot-maintainers"
+ # Full GitHub @-mention used when the bot needs to alert someone
+ alert_mention = "@rocq-prover/coqbot-maintainers"
  minimizer_url = "https://github.com/rocq-community/run-coq-bug-minimizer/actions"
 
+ [repositories.rocq.backporting]
+ github_project_number = 11
+
+ [[repositories.rocq.teams]]
+ team_name = "contributors"
+ permission = "contribute"
+
+ [[repositories.rocq.teams]]
+ team_name = "pushers"
+ permission = "push"
+
  [repositories.rocq.jobs]
- bench = "bench"
- custom_job_status = true
- doc_jobs = [
+ # GitLab CI job name handled by bench status/results logic
+ bench_job = "bench"
+ # Use Rocq-specific failure summaries / allow-failure handling
+ use_rocq_job_status = true
+ # Successful jobs that get a GitHub status check linking to doc artifacts
+ doc_artifact_jobs = [
   "doc:refman", "doc:ci-refman", "doc:init",
   "doc:stdlib", "doc:stdlib:dune", "doc:ml-api:odoc"
  ]

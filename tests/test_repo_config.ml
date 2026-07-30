@@ -11,18 +11,26 @@ let test_full_config () =
     gitlab_domain = "gitlab.inria.fr"
     gitlab_owner = "coq"
     gitlab_repo = "coq"
-    github_project_number = 11
     github_installation_id = 1062161
     org_name = "rocq-prover"
-    team_name = "contributors"
-    pushers_team = "pushers"
-    maintainers_team = "coqbot-maintainers"
+    alert_mention = "@rocq-prover/coqbot-maintainers"
     minimizer_url = "https://example.com"
 
+    [repositories.rocq.backporting]
+    github_project_number = 11
+
+    [[repositories.rocq.teams]]
+    team_name = "contributors"
+    permission = "contribute"
+
+    [[repositories.rocq.teams]]
+    team_name = "pushers"
+    permission = "push"
+
     [repositories.rocq.jobs]
-    bench = "bench"
-    custom_job_status = true
-    doc_jobs = ["doc:refman", "doc:stdlib"]
+    bench_job = "bench"
+    use_rocq_job_status = true
+    doc_artifact_jobs = ["doc:refman", "doc:stdlib"]
     |}
   in
   let tbl = parse toml in
@@ -30,10 +38,14 @@ let test_full_config () =
   | None ->
       fail "expected config"
   | Some cfg ->
-      (check int) "project" 11 (Option.value_exn cfg.github_project_number) ;
-      (check (option string)) "bench" (Some "bench") cfg.jobs.bench ;
-      (check bool) "custom" true cfg.jobs.custom_job_status ;
-      (check int) "doc_jobs" 2 (List.length cfg.jobs.doc_jobs)
+      (check (option int))
+        "project" (Some 11) cfg.backporting.github_project_number ;
+      (check (option string))
+        "alert" (Some "@rocq-prover/coqbot-maintainers") cfg.alert_mention ;
+      (check int) "teams" 2 (List.length cfg.teams) ;
+      (check (option string)) "bench_job" (Some "bench") cfg.jobs.bench_job ;
+      (check bool) "use_rocq_job_status" true cfg.jobs.use_rocq_job_status ;
+      (check int) "doc_artifact_jobs" 2 (List.length cfg.jobs.doc_artifact_jobs)
 
 let test_minimal_config () =
   let tbl = parse {|
@@ -44,9 +56,9 @@ let test_minimal_config () =
   | None ->
       fail "expected config"
   | Some cfg ->
-      (check (option int)) "project" None cfg.github_project_number ;
-      (check bool) "custom" false cfg.jobs.custom_job_status ;
-      (check (list string)) "doc_jobs" [] cfg.jobs.doc_jobs
+      (check (option int)) "project" None cfg.backporting.github_project_number ;
+      (check bool) "use_rocq_job_status" false cfg.jobs.use_rocq_job_status ;
+      (check (list string)) "doc_artifact_jobs" [] cfg.jobs.doc_artifact_jobs
 
 let test_bad_github () =
   check_raises "bad github"
