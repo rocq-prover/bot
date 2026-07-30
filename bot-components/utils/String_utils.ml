@@ -94,13 +94,6 @@ let strip_quoted_bot_name ~github_bot_name body =
     (Printf.sprintf "@\\1%s " (Str.quote github_bot_name))
     body
 
-let%expect_test "strip_quoted_bot_name" =
-  Stdio.printf "%s\n"
-    (strip_quoted_bot_name ~github_bot_name:"coqbot"
-       {|>this didn't produce a pipeline for some reason\r\n\r\nI think that this is normal. @herbelin was maybe expecting that adding the `request: full CI` label would trigger a new run immediately, but the semantics is that this label will produce such a full CI run at the next update (next push) of this PR. Cf. the [documentation](https://github.com/coq/coq/blob/master/CONTRIBUTING.md#understanding-automatic-feedback):\r\n\r\n>you can request a full run of the CI by putting the `request: full CI` label before pushing to your PR branch, or by commenting `@coqbot: run full CI` after having pushed. |} ) ;
-  [%expect
-    {| >this didn't produce a pipeline for some reason\r\n\r\nI think that this is normal. @herbelin was maybe expecting that adding the `request: full CI` label would trigger a new run immediately, but the semantics is that this label will produce such a full CI run at the next update (next push) of this PR. Cf. the [documentation](https://github.com/coq/coq/blob/master/CONTRIBUTING.md#understanding-automatic-feedback):\r\n\r\n>you can request a full run of the CI by putting the `request: full CI` label before pushing to your PR branch, or by commenting @`coqbot run full CI` after having pushed. |}]
-
 let clean_gitlab_trace trace =
   trace
   |> Str.global_replace (Str.regexp "\027\\[[0-9;]*m") ""

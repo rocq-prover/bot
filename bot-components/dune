@@ -7,7 +7,6 @@
  (modules_without_implementation GitHub_types GitLab_types)
  (libraries base camlzip cohttp-lwt-unix eqaf ohex mirage-crypto stdio str
    x509 yojson ISO8601 digestif toml)
- (inline_tests)
  (preprocess
   (per_module
    ((pps graphql_ppx -- -native -schema
@@ -15,10 +14,7 @@
     GitHub_GraphQL)
    ((pps graphql_ppx -- -native -schema
       bot-components/gitlab/gitlab-schema.json)
-    GitLab_GraphQL)
-   ((pps ppx_expect)
-    String_utils
-    Git_utils)))
+    GitLab_GraphQL)))
  (preprocessor_deps
   (file github/github-schema.json)
   (file gitlab/gitlab-schema.json)))
