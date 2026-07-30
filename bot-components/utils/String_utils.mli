@@ -23,6 +23,22 @@ val first_line_of_string : string -> string
 
 val remove_between : string -> int -> int -> string
 
+(** [split_on_unquoted_whitespace input] splits [input] at ASCII whitespace
+    outside single or double quotes. Shell quote and escape syntax is recognized
+    and preserved in the returned tokens.
+
+    Returns an error for an unterminated quote or a trailing backslash. *)
+val split_on_unquoted_whitespace : string -> (string list, string) Result.t
+
+(** [parse_key_value_arguments input] parses shell-style [key=value] words.
+    Quote and escape syntax is consumed. A missing equal sign produces a [None]
+    value; an equal sign produces [Some value], including [Some ""] for an
+    explicitly empty value. Values may contain additional equal signs.
+
+    Returns an error if quoting is malformed or an argument has an empty key. *)
+val parse_key_value_arguments :
+  string -> ((string * string option) list, string) Result.t
+
 (* ========================================================================== *)
 (* Formatting Functions *)
 (* ========================================================================== *)

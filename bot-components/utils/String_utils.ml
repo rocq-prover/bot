@@ -48,6 +48,110 @@ let first_line_of_string s =
 let remove_between s i j =
   String.sub ~pos:0 ~len:i s ^ String.sub s ~pos:j ~len:(String.length s - j)
 
+let split_shell_words ~preserve_syntax input =
+  let is_whitespace = function
+    | ' ' | '\t' | '\n' | '\r' | '\011' | '\012' ->
+        true
+    | _ ->
+        false
+  in
+  let buffer = Buffer.create (String.length input) in
+  let add_syntax char = if preserve_syntax then Buffer.add_char buffer char in
+  let finish_token token_started tokens =
+    if token_started then Buffer.contents buffer :: tokens else tokens
+  in
+  let length = String.length input in
+  let rec split index quote token_started tokens =
+    if index = length then
+      match quote with
+      | Some delimiter ->
+          Error (Printf.sprintf "unterminated %c quote" delimiter)
+      | None ->
+          Ok (List.rev (finish_token token_started tokens))
+    else
+      let char = input.[index] in
+      match quote with
+      | None when is_whitespace char ->
+          let tokens = finish_token token_started tokens in
+          Buffer.clear buffer ;
+          split (index + 1) None false tokens
+      | None when Char.equal char '\\' ->
+          if index + 1 = length then Error "trailing escape character"
+          else
+            let escaped = input.[index + 1] in
+            if Char.equal escaped '\n' then
+              split (index + 2) None token_started tokens
+            else (
+              add_syntax char ;
+              Buffer.add_char buffer escaped ;
+              split (index + 2) None true tokens )
+      | None when Char.equal char '\'' || Char.equal char '"' ->
+          add_syntax char ;
+          split (index + 1) (Some char) true tokens
+      | None ->
+          Buffer.add_char buffer char ;
+          split (index + 1) None true tokens
+      | Some '\'' when Char.equal char '\'' ->
+          add_syntax char ;
+          split (index + 1) None true tokens
+      | Some '\'' ->
+          Buffer.add_char buffer char ;
+          split (index + 1) quote true tokens
+      | Some '"' when Char.equal char '"' ->
+          add_syntax char ;
+          split (index + 1) None true tokens
+      | Some '"' when Char.equal char '\\' ->
+          if index + 1 = length then Error "unterminated \" quote"
+          else
+            let escaped = input.[index + 1] in
+            if Char.equal escaped '\n' then
+              split (index + 2) quote true tokens
+            else if
+              List.mem ['"'; '\\'; '$'; '`'] escaped ~equal:Char.equal
+            then (
+              add_syntax char ;
+              Buffer.add_char buffer escaped ;
+              split (index + 2) quote true tokens )
+            else (
+              Buffer.add_char buffer char ;
+              split (index + 1) quote true tokens )
+      | Some '"' ->
+          Buffer.add_char buffer char ;
+          split (index + 1) quote true tokens
+      | Some _ ->
+          failwith "unsupported quote delimiter"
+  in
+  split 0 None false []
+
+let split_on_unquoted_whitespace input =
+  split_shell_words ~preserve_syntax:true input
+
+let parse_key_value_arguments input =
+  match split_shell_words ~preserve_syntax:false input with
+  | Error _ as error ->
+      error
+  | Ok arguments ->
+      let rec parse parsed = function
+        | [] ->
+            Ok (List.rev parsed)
+        | argument :: arguments -> (
+          match Stdlib.String.index_opt argument '=' with
+          | None when String.is_empty argument ->
+              Error (Printf.sprintf "argument %S has an empty key" argument)
+          | None ->
+              parse ((argument, None) :: parsed) arguments
+          | Some 0 ->
+              Error (Printf.sprintf "argument %S has an empty key" argument)
+          | Some separator ->
+              let key = String.sub argument ~pos:0 ~len:separator in
+              let value =
+                String.sub argument ~pos:(separator + 1)
+                  ~len:(String.length argument - separator - 1)
+              in
+              parse ((key, Some value) :: parsed) arguments )
+      in
+      parse [] arguments
+
 (******************************************************************************)
 (* Formatting Functions                                                       *)
 (******************************************************************************)
