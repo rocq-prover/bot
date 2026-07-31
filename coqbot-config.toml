@@ -56,11 +56,11 @@ app_id="31373"
 
  [[repositories.rocq.teams]]
  team_name = "contributors"
- permission = "contribute"
+ permission = "trigger_ci"
 
  [[repositories.rocq.teams]]
  team_name = "pushers"
- permission = "push"
+ permission = "merge_pr"
 
  [repositories.rocq.jobs]
  # GitLab CI job name handled by bench status/results logic
