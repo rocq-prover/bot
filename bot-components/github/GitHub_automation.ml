@@ -19,140 +19,145 @@ let rec merge_pull_request_action ~bot_info ?(t = 1.) comment_info =
           else Some "You are not among the assignees." )
       ; comment_info.issue.labels
         |> List.find ~f:(fun label ->
-               String_utils.string_match ~regexp:"needs:.*" label )
+            String_utils.string_match ~regexp:"needs:.*" label )
         |> Option.map ~f:(fun l -> f "There is still a `%s` label." l)
       ; ( if
             comment_info.issue.labels
             |> List.exists ~f:(fun label ->
-                   String_utils.string_match ~regexp:"kind:.*" label )
+                String_utils.string_match ~regexp:"kind:.*" label )
           then None
           else Some "There is no `kind:` label." )
       ; ( if comment_info.issue.milestoned then None
           else Some "No milestone has been set." ) ]
   in
   ( match reasons_for_not_merging with
-  | _ :: _ ->
-      let bullet_reasons =
-        reasons_for_not_merging |> List.map ~f:(fun x -> "- " ^ x)
-      in
-      let reasons = bullet_reasons |> String.concat ~sep:"\n" in
-      Lwt.return_error
-        (f "@%s: You cannot merge this PR because:\n%s" comment_info.author
-           reasons )
-  | [] -> (
-      GitHub_queries.get_pull_request_reviews_refs ~bot_info
-        ~owner:pr.issue.owner ~repo:pr.issue.repo ~number:pr.issue.number
-      >>= function
-      | Ok reviews_info -> (
-          let comment =
-            List.find reviews_info.last_comments ~f:(fun c ->
-                GitHub_ID.equal comment_info.id c.id )
-          in
-          if (not comment_info.review_comment) && Option.is_none comment then
-            if Float.(t > 5.) then
+    | _ :: _ ->
+        let bullet_reasons =
+          reasons_for_not_merging |> List.map ~f:(fun x -> "- " ^ x)
+        in
+        let reasons = bullet_reasons |> String.concat ~sep:"\n" in
+        Lwt.return_error
+          (f "@%s: You cannot merge this PR because:\n%s" comment_info.author
+             reasons )
+    | [] -> (
+        GitHub_queries.get_pull_request_reviews_refs ~bot_info
+          ~owner:pr.issue.owner ~repo:pr.issue.repo ~number:pr.issue.number
+        >>= function
+        | Ok reviews_info -> (
+            let comment =
+              List.find reviews_info.last_comments ~f:(fun c ->
+                  GitHub_ID.equal comment_info.id c.id )
+            in
+            if (not comment_info.review_comment) && Option.is_none comment then
+              if Float.(t > 5.) then
+                Lwt.return_error
+                  "Something unexpected happened: did not find merge comment \
+                   after retrying three times.\n\
+                   cc @rocq-prover/coqbot-maintainers"
+              else
+                Lwt_unix.sleep t
+                >>= fun () ->
+                merge_pull_request_action ~t:(t *. 2.) ~bot_info comment_info
+                >>= fun () -> Lwt.return_ok ()
+            else if
+              (not comment_info.review_comment)
+              && (Option.value_exn comment).created_by_email
+              (* Option.value_exn doesn't raise an exception because comment isn't None at this point*)
+            then
               Lwt.return_error
-                "Something unexpected happened: did not find merge comment \
-                 after retrying three times.\n\
-                 cc @rocq-prover/coqbot-maintainers"
+                (f
+                   "@%s: Merge requests sent over e-mail are not accepted \
+                    because this puts less guarantee on the authenticity of \
+                    the author of the request."
+                   comment_info.author )
+            else if not (String.equal reviews_info.baseRef "master") then
+              Lwt.return_error
+                (f
+                   "@%s: This PR targets branch `%s` instead of `master`. Only \
+                    release managers can merge in release branches. If you are \
+                    the release manager for this branch, you should use the \
+                    `dev/tools/merge-pr.sh` script to merge this PR. Merging \
+                    with the bot is not supported yet."
+                   comment_info.author reviews_info.baseRef )
             else
-              Lwt_unix.sleep t
-              >>= fun () ->
-              merge_pull_request_action ~t:(t *. 2.) ~bot_info comment_info
-              >>= fun () -> Lwt.return_ok ()
-          else if
-            (not comment_info.review_comment)
-            && (Option.value_exn comment).created_by_email
-            (* Option.value_exn doesn't raise an exception because comment isn't None at this point*)
-          then
+              match reviews_info.review_decision with
+              | NONE | REVIEW_REQUIRED ->
+                  Lwt.return_error
+                    (f
+                       "@%s: You can't merge the PR because it hasn't been \
+                        approved yet."
+                       comment_info.author )
+              | CHANGES_REQUESTED ->
+                  Lwt.return_error
+                    (f
+                       "@%s: You can't merge the PR because some changes are \
+                        requested."
+                       comment_info.author )
+              | APPROVED -> (
+                  GitHub_queries.get_team_membership ~bot_info
+                    ~org:"rocq-prover" ~team:"pushers" ~user:comment_info.author
+                  >>= function
+                  | Ok false ->
+                      (* User not found in the team *)
+                      Lwt.return_error
+                        (f
+                           "@%s: You can't merge this PR because you're not a \
+                            member of the `@rocq-prover/pushers` team. Look at \
+                            the contributing guide for how to join this team."
+                           comment_info.author )
+                  | Ok true -> (
+                      GitHub_mutations.merge_pull_request ~bot_info ~pr_id:pr.id
+                        ~commit_headline:
+                          (f "Merge PR #%d: %s" pr.issue.number
+                             comment_info.issue.title )
+                        ~commit_body:
+                          ( List.fold_left reviews_info.approved_reviews ~init:""
+                              ~f:(fun s r -> s ^ f "Reviewed-by: %s\n" r )
+                          ^ List.fold_left reviews_info.comment_reviews ~init:""
+                              ~f:(fun s r -> s ^ f "Ack-by: %s\n" r )
+                          ^ f
+                              "Co-authored-by: %s <%s@users.noreply.github.com>\n"
+                              comment_info.author comment_info.author )
+                        ~merge_method:MERGE ()
+                      >>= fun () ->
+                      match
+                        List.fold_left ~init:[] reviews_info.files
+                          ~f:(fun acc f ->
+                            if
+                              String_utils.string_match
+                                ~regexp:"dev/ci/user-overlays/\\(.*\\)" f
+                            then
+                              let f = Str.matched_group 1 f in
+                              if String.equal f "README.md" then acc
+                              else f :: acc
+                            else acc )
+                      with
+                      | [] ->
+                          Lwt.return_ok ()
+                      | overlays ->
+                          GitHub_mutations.post_comment ~bot_info ~id:pr.id
+                            ~message:
+                              (f
+                                 "@%s: Please take care of the following \
+                                  overlays:\n\
+                                  %s"
+                                 comment_info.author
+                                 (List.fold_left overlays ~init:""
+                                    ~f:(fun s o -> s ^ f "- %s\n" o ) ) )
+                          >>= Utils.report_on_posting_comment
+                          >>= fun () -> Lwt.return_ok () )
+                  | Error e ->
+                      Lwt.return_error
+                        (f
+                           "Something unexpected happened: %s\n\
+                            cc @rocq-prover/coqbot-maintainers"
+                           e ) ) )
+        | Error e ->
             Lwt.return_error
               (f
-                 "@%s: Merge requests sent over e-mail are not accepted \
-                  because this puts less guarantee on the authenticity of the \
-                  author of the request."
-                 comment_info.author )
-          else if not (String.equal reviews_info.baseRef "master") then
-            Lwt.return_error
-              (f
-                 "@%s: This PR targets branch `%s` instead of `master`. Only \
-                  release managers can merge in release branches. If you are \
-                  the release manager for this branch, you should use the \
-                  `dev/tools/merge-pr.sh` script to merge this PR. Merging \
-                  with the bot is not supported yet."
-                 comment_info.author reviews_info.baseRef )
-          else
-            match reviews_info.review_decision with
-            | NONE | REVIEW_REQUIRED ->
-                Lwt.return_error
-                  (f
-                     "@%s: You can't merge the PR because it hasn't been \
-                      approved yet."
-                     comment_info.author )
-            | CHANGES_REQUESTED ->
-                Lwt.return_error
-                  (f
-                     "@%s: You can't merge the PR because some changes are \
-                      requested."
-                     comment_info.author )
-            | APPROVED -> (
-                GitHub_queries.get_team_membership ~bot_info ~org:"rocq-prover"
-                  ~team:"pushers" ~user:comment_info.author
-                >>= function
-                | Ok false ->
-                    (* User not found in the team *)
-                    Lwt.return_error
-                      (f
-                         "@%s: You can't merge this PR because you're not a \
-                          member of the `@rocq-prover/pushers` team. Look at \
-                          the contributing guide for how to join this team."
-                         comment_info.author )
-                | Ok true -> (
-                    GitHub_mutations.merge_pull_request ~bot_info ~pr_id:pr.id
-                      ~commit_headline:
-                        (f "Merge PR #%d: %s" pr.issue.number
-                           comment_info.issue.title )
-                      ~commit_body:
-                        ( List.fold_left reviews_info.approved_reviews ~init:""
-                            ~f:(fun s r -> s ^ f "Reviewed-by: %s\n" r )
-                        ^ List.fold_left reviews_info.comment_reviews ~init:""
-                            ~f:(fun s r -> s ^ f "Ack-by: %s\n" r )
-                        ^ f "Co-authored-by: %s <%s@users.noreply.github.com>\n"
-                            comment_info.author comment_info.author )
-                      ~merge_method:MERGE ()
-                    >>= fun () ->
-                    match
-                      List.fold_left ~init:[] reviews_info.files
-                        ~f:(fun acc f ->
-                          if
-                            String_utils.string_match
-                              ~regexp:"dev/ci/user-overlays/\\(.*\\)" f
-                          then
-                            let f = Str.matched_group 1 f in
-                            if String.equal f "README.md" then acc else f :: acc
-                          else acc )
-                    with
-                    | [] ->
-                        Lwt.return_ok ()
-                    | overlays ->
-                        GitHub_mutations.post_comment ~bot_info ~id:pr.id
-                          ~message:
-                            (f
-                               "@%s: Please take care of the following overlays:\n\
-                                %s"
-                               comment_info.author
-                               (List.fold_left overlays ~init:"" ~f:(fun s o ->
-                                    s ^ f "- %s\n" o ) ) )
-                        >>= Utils.report_on_posting_comment
-                        >>= fun () -> Lwt.return_ok () )
-                | Error e ->
-                    Lwt.return_error
-                      (f
-                         "Something unexpected happened: %s\n\
-                          cc @rocq-prover/coqbot-maintainers" e ) ) )
-      | Error e ->
-          Lwt.return_error
-            (f
-               "Something unexpected happened: %s\n\
-                cc @rocq-prover/coqbot-maintainers" e ) ) )
+                 "Something unexpected happened: %s\n\
+                  cc @rocq-prover/coqbot-maintainers"
+                 e ) ) )
   >>= function
   | Ok () ->
       Lwt.return_unit
@@ -254,49 +259,51 @@ let add_to_column ~bot_info ~backport_to id option =
     ~project:11 ~field ~options:[|option|]
   >>= fun project_info ->
   ( match project_info with
-  | Ok (project_id, Some (field_id, [(option', field_value_id)]))
-    when String.equal option option' ->
-      Lwt.return_ok (project_id, field_id, field_value_id)
-  | Ok (_, Some (_, [])) ->
-      Lwt.return_error
-        (f "Error: Could not find '%s' option in the field." option)
-  | Ok (_, Some _) ->
-      Lwt.return_error
-        (f "Error: Unexpected result when looking for '%s'." option)
-  | Ok (project_id, None) -> (
-      Lwt_io.printlf
-        "Required backporting field '%s' does not exist yet. Creating it..."
-        field
-      >>= fun () ->
-      GitHub_mutations.create_new_release_management_field ~bot_info ~project_id
-        ~field
-      >>= function
-      | Ok (field_id, options) -> (
-        match
-          List.find_map options ~f:(fun (option', field_value_id) ->
-              if String.equal option option' then Some field_value_id else None )
-        with
-        | Some field_value_id ->
-            Lwt.return_ok (project_id, field_id, field_value_id)
-        | None ->
+    | Ok (project_id, Some (field_id, [(option', field_value_id)]))
+      when String.equal option option' ->
+        Lwt.return_ok (project_id, field_id, field_value_id)
+    | Ok (_, Some (_, [])) ->
+        Lwt.return_error
+          (f "Error: Could not find '%s' option in the field." option)
+    | Ok (_, Some _) ->
+        Lwt.return_error
+          (f "Error: Unexpected result when looking for '%s'." option)
+    | Ok (project_id, None) -> (
+        Lwt_io.printlf
+          "Required backporting field '%s' does not exist yet. Creating it..."
+          field
+        >>= fun () ->
+        GitHub_mutations.create_new_release_management_field ~bot_info
+          ~project_id ~field
+        >>= function
+        | Ok (field_id, options) -> (
+          match
+            List.find_map options ~f:(fun (option', field_value_id) ->
+                if String.equal option option' then Some field_value_id
+                else None )
+          with
+          | Some field_value_id ->
+              Lwt.return_ok (project_id, field_id, field_value_id)
+          | None ->
+              Lwt.return_error
+                (f
+                   "Error new field '%s status' was created, but does not have \
+                    a '%s' option."
+                   field option ) )
+        | Error err ->
             Lwt.return_error
-              (f
-                 "Error new field '%s status' was created, but does not have a \
-                  '%s' option."
-                 field option ) )
-      | Error err ->
-          Lwt.return_error
-            (f "Error while creating new backporting field '%s': %s" field err)
-      )
-  | Error err ->
-      Lwt.return_error (f "Error while getting project field values: %s" err) )
+              (f "Error while creating new backporting field '%s': %s" field err)
+        )
+    | Error err ->
+        Lwt.return_error (f "Error while getting project field values: %s" err)
+    )
   >>= function
   | Ok (project_id, field_id, field_value_id) -> (
       ( match id with
-      | `PR_ID card_id ->
-          GitHub_mutations.add_card_to_project ~bot_info ~card_id ~project_id
-      | `Card_ID card_id ->
-          Lwt.return_ok card_id )
+        | `PR_ID card_id ->
+            GitHub_mutations.add_card_to_project ~bot_info ~card_id ~project_id
+        | `Card_ID card_id ->
+            Lwt.return_ok card_id )
       >>= fun result ->
       match result with
       | Ok card_id ->
@@ -314,10 +321,10 @@ let pull_request_closed_action ~bot_info
   gitlab_ci_ref_for_github_pr ~bot_info ~issue:pr_info.issue.issue
     ~github_mapping ~gitlab_mapping
   >>= (function
-        | Ok remote_ref ->
-            git_delete ~remote_ref |> execute_cmd >|= ignore
-        | Error err ->
-            Lwt_io.printlf "Error: %s" err )
+  | Ok remote_ref ->
+      git_delete ~remote_ref |> execute_cmd >|= ignore
+  | Error err ->
+      Lwt_io.printlf "Error: %s" err )
   <&>
   if remove_milestone_if_not_merged && not pr_info.merged then
     Lwt_io.printf
@@ -334,27 +341,26 @@ let add_remove_labels ~bot_info ~add (issue : issue_info) labels =
     let open Lwt.Infix in
     labels
     |> Lwt_list.filter_map_p (fun label ->
-           GitHub_queries.get_label ~bot_info ~owner:issue.issue.owner
-             ~repo:issue.issue.repo ~label
-           >|= function
-           | Ok (Some label) ->
-               Some label
-           | Ok None ->
-               (* Warn when a label is not found *)
-               (fun () ->
-                 Lwt_io.printlf
-                   "Warning: Label %s not found in repository %s/%s." label
-                   issue.issue.owner issue.issue.repo )
-               |> Lwt.async ;
-               None
-           | Error err ->
-               (* Print any other error, but do not prevent acting on other labels *)
-               (fun () ->
-                 Lwt_io.printlf
-                   "Error while querying for label %s in repository %s/%s: %s"
-                   label issue.issue.owner issue.issue.repo err )
-               |> Lwt.async ;
-               None )
+        GitHub_queries.get_label ~bot_info ~owner:issue.issue.owner
+          ~repo:issue.issue.repo ~label
+        >|= function
+        | Ok (Some label) ->
+            Some label
+        | Ok None ->
+            (* Warn when a label is not found *)
+            (fun () ->
+              Lwt_io.printlf "Warning: Label %s not found in repository %s/%s."
+                label issue.issue.owner issue.issue.repo )
+            |> Lwt.async ;
+            None
+        | Error err ->
+            (* Print any other error, but do not prevent acting on other labels *)
+            (fun () ->
+              Lwt_io.printlf
+                "Error while querying for label %s in repository %s/%s: %s"
+                label issue.issue.owner issue.issue.repo err )
+            |> Lwt.async ;
+            None )
   in
   match labels with
   | [] ->

@@ -20,8 +20,7 @@ let handle_push_event_for_repos ~bot_info ~key ~app_id ~install_id ~owner ~repo
         Bot_components.Github_installations.action_as_github_app_from_install_id
           ~bot_info ~key ~app_id ~install_id
           (mirror_action ~gitlab_domain:"gitlab.com" ~gh_owner:owner
-             ~gh_repo:repo ~gl_owner:owner ~gl_repo:repo ~base_ref ~head_sha () )
-        )
+             ~gh_repo:repo ~gl_owner:owner ~gl_repo:repo ~base_ref ~head_sha () ) )
       |> Lwt.async ;
       Server.respond_string ~status:`OK
         ~body:
@@ -37,8 +36,7 @@ let handle_push_event_for_repos ~bot_info ~key ~app_id ~install_id ~owner ~repo
         Bot_components.Github_installations.action_as_github_app_from_install_id
           ~bot_info ~key ~app_id ~install_id
           (mirror_action ~gitlab_domain:"gitlab.inria.fr" ~gh_owner:owner
-             ~gh_repo:repo ~gl_owner:owner ~gl_repo:repo ~base_ref ~head_sha () )
-        )
+             ~gh_repo:repo ~gl_owner:owner ~gl_repo:repo ~base_ref ~head_sha () ) )
       |> Lwt.async ;
       Server.respond_string ~status:`OK
         ~body:
@@ -89,8 +87,7 @@ let handle_comment_created ~bot_info ~key ~app_id ~github_bot_name
               ~owner:comment_info.issue.issue.owner
               ~repo:comment_info.issue.issue.repo ~options
               ~minimizer_url:
-                "https://github.com/rocq-community/run-coq-bug-minimizer/actions" )
-        )
+                "https://github.com/rocq-community/run-coq-bug-minimizer/actions" ) )
       |> Lwt.async ;
       Server.respond_string ~status:`OK ~body:"Handling minimization." ()
   | None -> (
@@ -278,8 +275,7 @@ let handle_github_webhook ~bot_info ~key ~app_id ~github_bot_name
       (fun () ->
         Bot_components.Github_installations.action_as_github_app ~bot_info ~key
           ~app_id ~owner:issue.owner (fun ~bot_info ->
-            GitHub_automation.adjust_milestone ~bot_info ~issue ~sleep_time:5. )
-        )
+            GitHub_automation.adjust_milestone ~bot_info ~issue ~sleep_time:5. ) )
       |> Lwt.async ;
       Server.respond_string ~status:`OK
         ~body:
@@ -299,8 +295,7 @@ let handle_github_webhook ~bot_info ~key ~app_id ~github_bot_name
       (fun () ->
         Bot_components.Github_installations.action_as_github_app_from_install_id
           ~bot_info ~key ~app_id ~install_id (fun ~bot_info ->
-            GitHub_automation.project_action ~bot_info ~pr_id ~backport_to () )
-        )
+            GitHub_automation.project_action ~bot_info ~pr_id ~backport_to () ) )
       |> Lwt.async ;
       Server.respond_string ~status:`OK
         ~body:
@@ -328,8 +323,7 @@ let handle_github_webhook ~bot_info ~key ~app_id ~github_bot_name
                   ~comment_author:issue_info.user ~owner:issue_info.issue.owner
                   ~repo:issue_info.issue.repo ~options
                   ~minimizer_url:
-                    "https://github.com/rocq-community/run-coq-bug-minimizer/actions" )
-            )
+                    "https://github.com/rocq-community/run-coq-bug-minimizer/actions" ) )
           |> Lwt.async ;
           Server.respond_string ~status:`OK ~body:"Handling minimization." ()
       | None ->
@@ -363,8 +357,7 @@ let handle_github_webhook ~bot_info ~key ~app_id ~github_bot_name
               ()
         | Some (gitlab_domain, url_part) ->
             (fun () ->
-              GitLab_mutations.generic_retry ~bot_info ~gitlab_domain ~url_part
-              )
+              GitLab_mutations.generic_retry ~bot_info ~gitlab_domain ~url_part )
             |> Lwt.async ;
             Server.respond_string ~status:`OK
               ~body:

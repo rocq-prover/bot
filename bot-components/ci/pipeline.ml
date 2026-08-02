@@ -15,19 +15,19 @@ let create_pipeline_summary ?summary_top pipeline_info pipeline_url =
   let sorted_builds =
     pipeline_info.builds
     |> List.sort ~compare:(fun build1 build2 ->
-           String.compare build1.build_name build2.build_name )
+        String.compare build1.build_name build2.build_name )
   in
   let stage_summary =
     pipeline_info.stages
     |> List.concat_map ~f:(fun stage ->
-           sorted_builds
-           |> List.filter_map ~f:(fun build ->
-                  if String.equal build.stage stage then
-                    Some
-                      (f "  - [%s](%s/-/jobs/%d)" build.build_name
-                         pipeline_info.common_info.http_repo_url build.build_id )
-                  else None )
-           |> List.cons ("- " ^ stage) )
+        sorted_builds
+        |> List.filter_map ~f:(fun build ->
+            if String.equal build.stage stage then
+              Some
+                (f "  - [%s](%s/-/jobs/%d)" build.build_name
+                   pipeline_info.common_info.http_repo_url build.build_id )
+            else None )
+        |> List.cons ("- " ^ stage) )
     |> String.concat ~sep:"\n"
   in
   [ f "This [GitLab pipeline](%s) sets the following variables:" pipeline_url

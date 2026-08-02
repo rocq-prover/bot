@@ -5,6 +5,10 @@
 .env
 .direnv
 .envrc
+.bot-env
+*.private-key.pem
+bot.log
+.github-token
 
 # vscode settings
 .vscode

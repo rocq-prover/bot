@@ -8,18 +8,18 @@ let send_graphql_query ~bot_info ?(extra_headers = []) ?(ignore_errors = false)
     ~api ~query ~parse variables =
   let uri =
     ( match api with
-    | GitLab gitlab_domain ->
-        f "https://%s/api/graphql" gitlab_domain
-    | GitHub ->
-        "https://api.github.com/graphql" )
+      | GitLab gitlab_domain ->
+          f "https://%s/api/graphql" gitlab_domain
+      | GitHub ->
+          "https://api.github.com/graphql" )
     |> Uri.of_string
   in
   let open Lwt_result.Infix in
   ( match api with
-  | GitLab gitlab_domain ->
-      gitlab_name_and_token bot_info gitlab_domain
-  | GitHub ->
-      Ok (bot_info.github_name, bot_info.github_install_token) )
+    | GitLab gitlab_domain ->
+        gitlab_name_and_token bot_info gitlab_domain
+    | GitHub ->
+        Ok (bot_info.github_name, bot_info.github_install_token) )
   |> Lwt.return
   >>= fun (name, token) ->
   let headers =
@@ -55,7 +55,7 @@ let send_graphql_query ~bot_info ?(extra_headers = []) ?(ignore_errors = false)
             let errors =
               to_list errors
               |> List.map ~f:(fun error ->
-                     error |> member "message" |> to_string )
+                  error |> member "message" |> to_string )
             in
             Error
               ( "Server responded to GraphQL request with errors: "

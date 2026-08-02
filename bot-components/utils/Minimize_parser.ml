@@ -54,8 +54,10 @@ let parse_minimize_text_of_body ~github_bot_name body =
     string_match
       ~regexp:
         ( f
-            "@%s:? \
-             [Mm]inimize\\([^`]*\\)```\\([^\n\r]*\\)[\r]*\n\\(\\(.\\|\n\\)+\\)"
+            "@%s:? [Mm]inimize\\([^`]*\\)```\\([^\n\
+             \r]*\\)[\r]*\n\
+             \\(\\(.\\|\n\
+             \\)+\\)"
         @@ Str.quote github_bot_name )
       body
   then
@@ -104,8 +106,13 @@ let parse_resume_ci_minimize_text_of_body ~github_bot_name body =
     string_match
       ~regexp:
         ( f
-            "@%s:?\\( [^\n] *\\)\\bresume [Cc][Ii][- \
-             ][Mm]inimiz\\(e\\|ation\\):?\\([^\n]*\\)[\r]*\n+```\\([^\n]*\\)[\r]*\n\\(\\(.\\|\n\\)+\\)"
+            "@%s:?\\( [^\n\
+             ] *\\)\\bresume [Cc][Ii][- ][Mm]inimiz\\(e\\|ation\\):?\\([^\n\
+             ]*\\)[\r]*\n\
+             +```\\([^\n\
+             ]*\\)[\r]*\n\
+             \\(\\(.\\|\n\
+             \\)+\\)"
         @@ Str.quote github_bot_name )
       body
   then
@@ -123,10 +130,11 @@ let parse_resume_ci_minimize_text_of_body ~github_bot_name body =
     string_match
       ~regexp:
         ( f
-            "@%s:?\\( [^\n]*\\)\\bresume [Cc][Ii][- \
-             ][Mm]inimiz\\(e\\|ation\\):?[ \n            ]+\\([^ \
-             \n            ]+\\)[ \n            ]+\\[\\([^]]*\\)\\] \
-             *(\\([^)]*\\))"
+            "@%s:?\\( [^\n\
+             ]*\\)\\bresume [Cc][Ii][- ][Mm]inimiz\\(e\\|ation\\):?[ \n\
+            \            ]+\\([^ \n\
+            \            ]+\\)[ \n\
+            \            ]+\\[\\([^]]*\\)\\] *(\\([^)]*\\))"
         @@ Str.quote github_bot_name )
       body
   then
@@ -144,10 +152,12 @@ let parse_resume_ci_minimize_text_of_body ~github_bot_name body =
     string_match
       ~regexp:
         ( f
-            "@%s:?\\( [^\n]*\\)\\bresume [Cc][Ii][- \
-             ][Mm]inimiz\\(e\\|ation\\):?[ \n            ]+\\([^ \
-             \n            ]+\\)[ \n            ]+\\(https?://[^ \
-             \n            ]+\\)"
+            "@%s:?\\( [^\n\
+             ]*\\)\\bresume [Cc][Ii][- ][Mm]inimiz\\(e\\|ation\\):?[ \n\
+            \            ]+\\([^ \n\
+            \            ]+\\)[ \n\
+            \            ]+\\(https?://[^ \n\
+            \            ]+\\)"
         @@ Str.quote github_bot_name )
       body
   then

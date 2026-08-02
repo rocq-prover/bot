@@ -23,9 +23,14 @@ let send_status_check ~bot_info job_info ~pr_num (gh_owner, gh_repo)
     ~trace
     ?(summary_builder = fun _ trace_description -> Lwt.return trace_description)
     ?(allow_failure_handler =
-      fun ~bot_info:_ ~job_name:_ ~job_url:_ ~pr_num:_ ~head_commit:_
-          (_gh_owner, _gh_repo) ~gitlab_repo_full_name:_ ->
-        Lwt.return_unit) () =
+      fun ~bot_info:_
+        ~job_name:_
+        ~job_url:_
+        ~pr_num:_
+        ~head_commit:_
+        (_gh_owner, _gh_repo)
+        ~gitlab_repo_full_name:_
+      -> Lwt.return_unit) () =
   let job_url =
     f "https://%s/%s/-/jobs/%d" gitlab_domain gitlab_repo_full_name
       job_info.build_id
@@ -39,7 +44,7 @@ let send_status_check ~bot_info job_info ~pr_num (gh_owner, gh_repo)
         ( "Test has failed on GitLab CI"
         , trace_lines
           |> List.filter_mapi ~f:(fun i line ->
-                 if String.is_prefix ~prefix:"Error" line then Some i else None )
+              if String.is_prefix ~prefix:"Error" line then Some i else None )
           |> List.last )
     | "job_execution_timeout" ->
         ("Test has reached timeout on GitLab CI", None)

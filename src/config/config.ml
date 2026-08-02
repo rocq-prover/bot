@@ -27,38 +27,37 @@ let gitlab_instances toml_data =
       | Toml.Types.TTable a ->
           list_table_keys a
           |> List.map ~f:(fun k ->
-                 let bot_name =
-                   subkey_value a k "bot_name"
-                   |> Option.value ~default:(github_bot_name toml_data)
-                 in
-                 match
-                   (subkey_value a k "domain", subkey_value a k "api_token")
-                 with
-                 | None, _ ->
-                     failwith
-                       (f "Invalid gitlab.%s configuration: missing domain key."
-                          k )
-                 | Some domain, Some api_token ->
-                     (* If api_token is found, we use its value in priority *)
-                     (domain, (bot_name, api_token))
-                 | Some domain, None -> (
-                   (* Otherwise, we look for an environment variable, whose
+              let bot_name =
+                subkey_value a k "bot_name"
+                |> Option.value ~default:(github_bot_name toml_data)
+              in
+              match
+                (subkey_value a k "domain", subkey_value a k "api_token")
+              with
+              | None, _ ->
+                  failwith
+                    (f "Invalid gitlab.%s configuration: missing domain key." k)
+              | Some domain, Some api_token ->
+                  (* If api_token is found, we use its value in priority *)
+                  (domain, (bot_name, api_token))
+              | Some domain, None -> (
+                (* Otherwise, we look for an environment variable, whose
                       name is given by api_token_env_var *)
-                   match subkey_value a k "api_token_env_var" with
-                   | Some api_token_env_var ->
-                       (domain, (bot_name, Sys.getenv_exn api_token_env_var))
-                   | _ ->
-                       failwith
-                         (f
-                            "Invalid gitlab.%s configuration: missing \
-                             api_token and api_token_env_var keys."
-                            k ) ) )
+                match subkey_value a k "api_token_env_var" with
+                | Some api_token_env_var ->
+                    (domain, (bot_name, Sys.getenv_exn api_token_env_var))
+                | _ ->
+                    failwith
+                      (f
+                         "Invalid gitlab.%s configuration: missing api_token \
+                          and api_token_env_var keys."
+                         k ) ) )
       | _ ->
           failwith "Invalid gitlab configuration: not a table."
     with Stdlib.Not_found ->
       [ ( "gitlab.com"
         , (github_bot_name toml_data, Sys.getenv_exn "GITLAB_ACCESS_TOKEN") ) ]
-  )
+    )
   |> Hashtbl.of_alist_exn (module String)
 
 let github_webhook_secret toml_data =

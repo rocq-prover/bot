@@ -38,7 +38,9 @@ let test_basic_minimize () =
 
 (* Test: Minimize with no options *)
 let test_minimize_no_options () =
-  let body = "@coqbot minimize\n```bash\n#!/usr/bin/env bash\nopam install\n```" in
+  let body =
+    "@coqbot minimize\n```bash\n#!/usr/bin/env bash\nopam install\n```"
+  in
   test_minimize_parses ~name:"minimize no options" ~body ~expected_options:""
     ~expected_quote_kind:"bash"
 
@@ -63,8 +65,11 @@ let test_minimize_with_colon () =
 (* Test: The exact failing case from the issue *)
 let test_minimize_issue_case () =
   let body =
-    "@coqbot minimize\n```bash\n#!/usr/bin/env bash\nopam install -y \
-     coq-fiat-crypto\n```"
+    "@coqbot minimize\n\
+     ```bash\n\
+     #!/usr/bin/env bash\n\
+     opam install -y coq-fiat-crypto\n\
+     ```"
   in
   test_minimize_parses ~name:"issue case" ~body ~expected_options:""
     ~expected_quote_kind:"bash"
@@ -76,7 +81,9 @@ let test_minimize_no_code_block () =
 
 (* Test: CI minimize basic *)
 let test_ci_minimize_basic () =
-  match parse_ci_minimize_text_of_body ~github_bot_name "@coqbot ci minimize" with
+  match
+    parse_ci_minimize_text_of_body ~github_bot_name "@coqbot ci minimize"
+  with
   | None ->
       Alcotest.fail "ci minimize basic: expected parse to succeed"
   | Some (_, requests) when List.is_empty requests ->
@@ -88,7 +95,8 @@ let test_ci_minimize_basic () =
 (* Test: CI minimize with requests *)
 let test_ci_minimize_with_requests () =
   match
-    parse_ci_minimize_text_of_body ~github_bot_name "@coqbot ci minimize job1 job2"
+    parse_ci_minimize_text_of_body ~github_bot_name
+      "@coqbot ci minimize job1 job2"
   with
   | None ->
       Alcotest.fail "ci minimize with requests: expected parse to succeed"
@@ -96,7 +104,8 @@ let test_ci_minimize_with_requests () =
       let expected = ["job1"; "job2"] in
       if List.equal String.equal requests expected then ()
       else
-        Alcotest.failf "ci minimize with requests: expected [job1; job2], got [%s]"
+        Alcotest.failf
+          "ci minimize with requests: expected [job1; job2], got [%s]"
           (String.concat ~sep:"; " requests)
 
 (* Test: CI-minimize (hyphenated) *)

@@ -21,23 +21,25 @@ ocaml libraries.
 Use the following command to build:
 
 ```
-dune build --ignore-promoted-rules
-```
-
-If you want to update the GraphQL schema:
-
-```
 dune build
 ```
 
-This call to `dune build` without the `--ignore-promoted-rules` option
-requires that a file `bot-components/.github-token` be provided and
-contain a single line with a GitHub API personal token (with no
-specific permission).  It will use this token and the node package
-`get-graphql-schema` to update the GitHub schema stored in
-`bot-component/schema.json`, before building the project.
-Get `get-graphql-schema` with `npm install get-graphql-schema -g` if you're
-not compiling in `nix-shell`.
+Committed GraphQL schemas under `bot-components/github/github-schema.json` and
+`bot-components/gitlab/gitlab-schema.json` are used as-is. Normal builds do not
+re-fetch them.
+
+To refresh the schemas:
+
+```
+dune build @update-schema
+```
+
+Updating the GitHub schema requires `bot-components/.github-token`: one line
+with a GitHub personal access token (no special permission). It uses the
+`get-graphql-schema` npm package. Install with `npm install get-graphql-schema -g` if you are not in `nix-shell`.
+
+After refreshing, rebuild and fix any GraphQL typing breakages, then commit the
+schema JSON and code changes together.
 
 ## Testing locally ##
 

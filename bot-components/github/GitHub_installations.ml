@@ -64,7 +64,7 @@ let action_as_github_app ~bot_info ~key ~app_id ~owner action =
         match
           installs
           |> List.find_map ~f:(fun (owner', install_id) ->
-                 if String.equal owner owner' then Some install_id else None )
+              if String.equal owner owner' then Some install_id else None )
         with
         | Some install_id ->
             let _ = Hashtbl.add installation_ids ~key:owner ~data:install_id in
