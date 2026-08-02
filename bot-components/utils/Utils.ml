@@ -11,6 +11,35 @@ let toml_of_file file_path = Toml.Parser.(from_filename file_path |> unsafe)
 let subkey_value toml_table k k' =
   Toml.Lenses.(get toml_table (key k |-- table |-- key k' |-- string))
 
+let subkey_table toml_table k k' =
+  Toml.Lenses.(get toml_table (key k |-- table |-- key k' |-- table))
+
+let subkey_int toml_table k k' =
+  match Toml.Lenses.(get toml_table (key k |-- table |-- key k' |-- int)) with
+  | Some n ->
+      Some n
+  | None ->
+      subkey_value toml_table k k' |> Option.map ~f:Int.of_string
+
+let key_value toml_table k = Toml.Lenses.(get toml_table (key k |-- string))
+
+let key_array toml_table k =
+  Toml.Lenses.(get toml_table (key k |-- array |-- strings))
+
+let key_bool toml_table k =
+  match Toml.Lenses.(get toml_table (key k |-- bool)) with
+  | Some b ->
+      Some b
+  | None ->
+      key_value toml_table k |> Option.map ~f:Bool.of_string
+
+let key_int tbl k =
+  match Toml.Lenses.(get tbl (key k |-- int)) with
+  | Some i ->
+      Some i
+  | None ->
+      key_value tbl k |> Option.map ~f:Int.of_string
+
 let find k toml_table =
   Toml.Types.Table.find (Toml.Types.Table.Key.of_string k) toml_table
 

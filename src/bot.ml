@@ -31,6 +31,8 @@ let bot_info : Bot_components.Bot_info.t =
 
 let github_mapping, gitlab_mapping = Config.make_mappings_table toml_data
 
+let repo_config_table = Repo_config.make_repo_config_table toml_data
+
 (* TODO: deprecate unsigned webhooks *)
 
 let callback _conn req body =

@@ -38,3 +38,37 @@ app_id="31373"
   github="math-comp/docker-mathcomp"
   gitlab="math-comp/docker-mathcomp"
   gitlab_domain="gitlab.inria.fr"
+
+[repositories]
+ [repositories.rocq]
+ github = "rocq-prover/rocq"
+ gitlab_domain = "gitlab.inria.fr"
+ gitlab_owner = "coq"
+ gitlab_repo = "coq"
+ github_installation_id = 1062161
+ org_name = "rocq-prover"
+ # Full GitHub @-mention used when the bot needs to alert someone
+ alert_mention = "@rocq-prover/coqbot-maintainers"
+ minimizer_url = "https://github.com/rocq-community/run-coq-bug-minimizer/actions"
+
+ [repositories.rocq.backporting]
+ github_project_number = 11
+
+ [[repositories.rocq.teams]]
+ team_name = "contributors"
+ permission = "trigger_ci"
+
+ [[repositories.rocq.teams]]
+ team_name = "pushers"
+ permission = "merge_pr"
+
+ [repositories.rocq.jobs]
+ # GitLab CI job name handled by bench status/results logic
+ bench_job = "bench"
+ # Use Rocq-specific failure summaries / allow-failure handling
+ use_rocq_job_status = true
+ # Successful jobs that get a GitHub status check linking to doc artifacts
+ doc_artifact_jobs = [
+  "doc:refman", "doc:ci-refman", "doc:init",
+  "doc:stdlib", "doc:stdlib:dune", "doc:ml-api:odoc"
+ ]

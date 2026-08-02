@@ -25,6 +25,11 @@
    test_helpers))
 
 (test
+ (name test_repo_config)
+ (modules test_repo_config)
+ (libraries alcotest bot-components coq-bot.config base))
+
+(test
  (name test_pat_usage)
  (modules test_pat_usage)
  (libraries alcotest bot-components coq-bot.utils base test_helpers))
