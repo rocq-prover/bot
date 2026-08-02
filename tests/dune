@@ -33,3 +33,13 @@
  (name test_minimize_parser)
  (modules test_minimize_parser)
  (libraries alcotest bot-components base))
+
+(test
+ (name test_git_utils)
+ (modules test_git_utils)
+ (libraries alcotest bot-components base))
+
+(test
+ (name test_string_utils)
+ (modules test_string_utils)
+ (libraries alcotest bot-components base))
