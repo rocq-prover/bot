@@ -19,13 +19,17 @@ let get_pull_request_cards ~bot_info ~owner ~repo ~number =
       match result.pullRequest with
       | Some result ->
           let items =
-            match result.projectItems.items with
+            match result.projectItems with
             | None ->
                 []
-            | Some items ->
-                items |> Array.to_list |> List.filter_opt
-                |> List.map ~f:(fun item ->
-                    (GitHub_ID.of_string item.item_id, item.projectV2.number) )
+            | Some project_items -> (
+              match project_items.items with
+              | None ->
+                  []
+              | Some items ->
+                  items |> Array.to_list |> List.filter_opt
+                  |> List.map ~f:(fun item ->
+                      (GitHub_ID.of_string item.item_id, item.projectV2.number) ) )
           in
           Ok items
       | None ->
