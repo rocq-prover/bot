@@ -19,7 +19,6 @@ let job_action ~bot_info
         github_repo_of_gitlab_project_path ~gitlab_mapping ~gitlab_domain
           ~gitlab_repo_full_name
       in
-      let github_repo_full_name = gh_owner ^ "/" ^ gh_repo in
       let repo_config =
         Repo_config.find_by_github ~owner:gh_owner ~repo:gh_repo
           repo_config_table
@@ -74,12 +73,36 @@ let job_action ~bot_info
               (gh_owner, gh_repo) ~gitlab_domain ~gitlab_repo_full_name ~context
               ~failure_reason ~external_id ~silence_docker_manifest_errors
               ~summary_builder ~allow_failure_handler ()
-        | "success" as state ->
+        | "success" as state -> (
             Job_status.job_success_or_pending ~bot_info (gh_owner, gh_repo)
               job_info ~gitlab_domain ~gitlab_repo_full_name ~context ~state
               ~external_id
-            <&> Documentation.send_doc_url ~bot_info job_info
-                  ~github_repo_full_name
+            <&>
+            match repo_config with
+            | Some cfg when Repo_config.is_doc_artifact_job cfg build_name -> (
+              match
+                Repo_config.gitlab_job_url cfg ~job_id:job_info.build_id
+              with
+              | None ->
+                  Lwt_io.printl
+                    "Doc artifact job configured but GitLab coordinates \
+                     missing; skipping doc status."
+              | Some gitlab_job_url ->
+                  let artifact_url artifact =
+                    match
+                      Repo_config.gitlab_pages_artifact_url cfg
+                        ~job_id:job_info.build_id ~artifact
+                    with
+                    | Some url ->
+                        url
+                    | None ->
+                        gitlab_job_url
+                  in
+                  Documentation.send_doc_url ~bot_info
+                    ~github_repo_full_name:(Repo_config.github_full_name cfg)
+                    ~gitlab_job_url ~artifact_url job_info )
+            | _ ->
+                Lwt.return_unit )
         | ("created" | "running") as state ->
             Job_status.job_success_or_pending ~bot_info (gh_owner, gh_repo)
               job_info ~gitlab_domain ~gitlab_repo_full_name ~context ~state
