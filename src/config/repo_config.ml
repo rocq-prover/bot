@@ -4,6 +4,7 @@ open Utils
 type repo_jobs_config =
   { bench_job: string option
   ; use_rocq_job_status: bool
+  ; silence_docker_manifest_errors: bool
   ; doc_artifact_jobs: string list }
 
 type backport_config = {github_project_number: int option}
@@ -25,7 +26,10 @@ type t =
   ; jobs: repo_jobs_config }
 
 let default_jobs =
-  {bench_job= None; use_rocq_job_status= false; doc_artifact_jobs= []}
+  { bench_job= None
+  ; use_rocq_job_status= false
+  ; silence_docker_manifest_errors= false
+  ; doc_artifact_jobs= [] }
 
 let default_backporting = {github_project_number= None}
 
@@ -40,6 +44,9 @@ let parse_jobs tbl key =
               if String.is_empty s then None else Some s )
       ; use_rocq_job_status=
           key_bool jobs_tbl "use_rocq_job_status" |> Option.value ~default:false
+      ; silence_docker_manifest_errors=
+          key_bool jobs_tbl "silence_docker_manifest_errors"
+          |> Option.value ~default:false
       ; doc_artifact_jobs=
           key_array jobs_tbl "doc_artifact_jobs" |> Option.value ~default:[] }
 

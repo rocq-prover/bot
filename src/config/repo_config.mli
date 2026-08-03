@@ -1,6 +1,7 @@
 type repo_jobs_config =
   { bench_job: string option
   ; use_rocq_job_status: bool
+  ; silence_docker_manifest_errors: bool
   ; doc_artifact_jobs: string list }
 
 type backport_config = {github_project_number: int option}

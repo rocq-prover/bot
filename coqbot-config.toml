@@ -68,6 +68,7 @@ app_id="31373"
  # Use Rocq-specific failure summaries / allow-failure handling
  use_rocq_job_status = true
  # Successful jobs that get a GitHub status check linking to doc artifacts
+ silence_docker_manifest_errors = true
  doc_artifact_jobs = [
   "doc:refman", "doc:ci-refman", "doc:init",
   "doc:stdlib", "doc:stdlib:dune", "doc:ml-api:odoc"

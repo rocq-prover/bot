@@ -30,6 +30,7 @@ let test_full_config () =
     [repositories.rocq.jobs]
     bench_job = "bench"
     use_rocq_job_status = true
+    silence_docker_manifest_errors = true
     doc_artifact_jobs = ["doc:refman", "doc:stdlib"]
     |}
   in
@@ -45,6 +46,8 @@ let test_full_config () =
       (check int) "teams" 2 (List.length cfg.teams) ;
       (check (option string)) "bench_job" (Some "bench") cfg.jobs.bench_job ;
       (check bool) "use_rocq_job_status" true cfg.jobs.use_rocq_job_status ;
+      (check bool) "silence_docker_manifest_errors" true
+        cfg.jobs.silence_docker_manifest_errors ;
       (check int) "doc_artifact_jobs" 2 (List.length cfg.jobs.doc_artifact_jobs)
 
 let test_minimal_config () =
