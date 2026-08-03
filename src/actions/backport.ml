@@ -96,3 +96,43 @@ let push_action ~bot_info ~(repo_config : Repo_config.t) ~base_ref ~commits_msg
         else Lwt.return_unit
       in
       Lwt_list.iter_s commit_action commits_msg
+
+let project_action ~bot_info ~(repo_config : Repo_config.t) ~pr_id ~backport_to
+    () =
+  let owner = repo_config.github_owner in
+  let repo = repo_config.github_repo in
+  GitHub_queries.get_pull_request_milestone ~bot_info ~pr_id
+  >>= function
+  | Error err ->
+      Lwt_io.printf "Error: %s\n" err
+  | Ok backport_info -> (
+    match
+      List.find_map backport_info
+        ~f:(fun {backport_to= backport_to'; rejected_milestone} ->
+          if String.equal backport_to backport_to' then Some rejected_milestone
+          else None )
+    with
+    | None ->
+        Lwt_io.printf
+          "PR already not in milestone with backporting info for branch %s.\n"
+          backport_to
+    | Some rejected_milestone -> (
+        Lwt_io.printf
+          "PR is in milestone for which backporting to %s was rejected.\n\
+           Change of milestone requested.\n"
+          backport_to
+        >>= fun () ->
+        GitHub_queries.get_milestone_id ~bot_info ~owner ~repo
+          ~number:rejected_milestone
+        >>= function
+        | Ok milestone ->
+            GitHub_mutations.update_milestone_pull_request ~bot_info ~pr_id
+              ~milestone
+            <&> ( GitHub_mutations.post_comment ~bot_info ~id:pr_id
+                    ~message:
+                      "This PR was postponed. Please update accordingly the \
+                       milestone of any issue that this fixes as this cannot \
+                       be done automatically."
+                >>= Utils.report_on_posting_comment )
+        | Error err ->
+            Lwt_io.printlf "Error while obtaining milestone ID: %s" err ) )

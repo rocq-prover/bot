@@ -301,23 +301,30 @@ let handle_github_webhook ~bot_info ~key ~app_id ~github_bot_name
           ; field
           ; old_value= Some "Request inclusion"
           ; new_value= Some "Rejected" } )
-    when String.is_suffix ~suffix:" status" field
-         && Option.is_some
-              (Repo_config.find_by_backport_project ~install_id ~project_number
-                 repo_config_table ) ->
-      let backport_to = String.drop_suffix field 7 in
-      (fun () ->
-        Bot_components.Github_installations.action_as_github_app_from_install_id
-          ~bot_info ~key ~app_id ~install_id (fun ~bot_info ->
-            GitHub_automation.project_action ~bot_info ~pr_id ~backport_to () ) )
-      |> Lwt.async ;
-      Server.respond_string ~status:`OK
-        ~body:
-          (f
-             "PR proposed for backporting was rejected from inclusion in %s. \
-              Updating the milestone."
-             backport_to )
-        ()
+    when String.is_suffix ~suffix:" status" field -> (
+    match
+      Repo_config.find_by_backport_project ~install_id ~project_number
+        repo_config_table
+    with
+    | None ->
+        Server.respond_string ~status:`OK
+          ~body:"Unsupported pull request card edition." ()
+    | Some repo_config ->
+        let backport_to = String.drop_suffix field 7 in
+        (fun () ->
+          Bot_components.Github_installations
+          .action_as_github_app_from_install_id ~bot_info ~key ~app_id
+            ~install_id (fun ~bot_info ->
+              Backport.project_action ~bot_info ~repo_config ~pr_id ~backport_to
+                () ) )
+        |> Lwt.async ;
+        Server.respond_string ~status:`OK
+          ~body:
+            (f
+               "PR proposed for backporting was rejected from inclusion in %s. \
+                Updating the milestone."
+               backport_to )
+          () )
   | Ok (_, PullRequestCardEdited _) ->
       Server.respond_string ~status:`OK
         ~body:"Unsupported pull request card edition." ()
