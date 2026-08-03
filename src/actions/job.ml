@@ -7,7 +7,8 @@ open Utils
 open Lwt.Infix
 
 let job_action ~bot_info
-    ({build_name; common_info= {http_repo_url}} as job_info) ~gitlab_mapping =
+    ({build_name; common_info= {http_repo_url}} as job_info) ~gitlab_mapping
+    ~repo_config_table =
   let pr_num, branch_or_pr = pr_from_branch job_info.common_info.branch in
   let context = f "GitLab CI job %s (%s)" build_name branch_or_pr in
   match parse_gitlab_repo_url ~http_repo_url with
@@ -19,43 +20,48 @@ let job_action ~bot_info
           ~gitlab_repo_full_name
       in
       let github_repo_full_name = gh_owner ^ "/" ^ gh_repo in
+      let repo_config =
+        Repo_config.find_by_github ~owner:gh_owner ~repo:gh_repo
+          repo_config_table
+      in
       let external_id =
         f "%s,projects/%d/jobs/%d" http_repo_url job_info.common_info.project_id
           job_info.build_id
       in
-      match (github_repo_full_name, job_info.build_name) with
-      | "rocq-prover/rocq", "bench" ->
+      match repo_config with
+      | Some cfg when Repo_config.is_bench_job cfg build_name ->
           Bench.update_bench_status ~bot_info ~job_info (gh_owner, gh_repo)
             ~external_id ~number:pr_num
-      | _, _ -> (
+      | _ -> (
         match job_info.build_status with
         | "failed" ->
             let failure_reason = Option.value_exn job_info.failure_reason in
             let summary_builder, allow_failure_handler =
-              if String.equal github_repo_full_name "rocq-prover/rocq" then
-                ( Job_status_rocq.rocq_summary_builder
-                , fun ~bot_info
-                    ~job_name
-                    ~job_url
-                    ~pr_num
-                    ~head_commit
-                    (gh_owner, gh_repo)
-                    ~gitlab_repo_full_name
-                  ->
-                    Job_status_rocq.handle_rocq_allow_failure ~bot_info
-                      ~job_name ~job_url ~pr_num ~head_commit
-                      (gh_owner, gh_repo) ~gitlab_repo_full_name )
-              else
-                ( (fun _trace_lines trace_description ->
-                    Lwt.return trace_description )
-                , fun ~bot_info:_
-                    ~job_name:_
-                    ~job_url:_
-                    ~pr_num:_
-                    ~head_commit:_
-                    _
-                    ~gitlab_repo_full_name:_
-                  -> Lwt.return_unit )
+              match repo_config with
+              | Some cfg when cfg.jobs.use_rocq_job_status ->
+                  ( Job_status_rocq.rocq_summary_builder
+                  , fun ~bot_info
+                      ~job_name
+                      ~job_url
+                      ~pr_num
+                      ~head_commit
+                      (gh_owner, gh_repo)
+                      ~gitlab_repo_full_name
+                    ->
+                      Job_status_rocq.handle_rocq_allow_failure ~bot_info
+                        ~job_name ~job_url ~pr_num ~head_commit
+                        (gh_owner, gh_repo) ~gitlab_repo_full_name )
+              | _ ->
+                  ( (fun _trace_lines trace_description ->
+                      Lwt.return trace_description )
+                  , fun ~bot_info:_
+                      ~job_name:_
+                      ~job_url:_
+                      ~pr_num:_
+                      ~head_commit:_
+                      _
+                      ~gitlab_repo_full_name:_
+                    -> Lwt.return_unit )
             in
             Job_status.job_failure ~bot_info job_info ~pr_num
               (gh_owner, gh_repo) ~gitlab_domain ~gitlab_repo_full_name ~context

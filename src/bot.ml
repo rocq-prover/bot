@@ -49,7 +49,8 @@ let callback _conn req body =
   match path with
   | "/job" | "/pipeline" (* legacy endpoints *) | "/gitlab" ->
       Gitlab.handle_gitlab_webhook ~bot_info ~key ~app_id ~gitlab_mapping
-        ~gitlab_webhook_secret ~headers:(Request.headers req) ~body
+        ~repo_config_table ~gitlab_webhook_secret ~headers:(Request.headers req)
+        ~body
   | "/push" | "/pull_request" (* legacy endpoints *) | "/github" ->
       Github.handle_github_webhook ~bot_info ~key ~app_id ~github_bot_name
         ~gitlab_mapping ~repo_config_table ~github_mapping
