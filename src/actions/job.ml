@@ -63,10 +63,17 @@ let job_action ~bot_info
                       ~gitlab_repo_full_name:_
                     -> Lwt.return_unit )
             in
+            let silence_docker_manifest_errors =
+              match repo_config with
+              | Some cfg ->
+                  cfg.jobs.silence_docker_manifest_errors
+              | None ->
+                  false
+            in
             Job_status.job_failure ~bot_info job_info ~pr_num
               (gh_owner, gh_repo) ~gitlab_domain ~gitlab_repo_full_name ~context
-              ~failure_reason ~external_id ~summary_builder
-              ~allow_failure_handler ()
+              ~failure_reason ~external_id ~silence_docker_manifest_errors
+              ~summary_builder ~allow_failure_handler ()
         | "success" as state ->
             Job_status.job_success_or_pending ~bot_info (gh_owner, gh_repo)
               job_info ~gitlab_domain ~gitlab_repo_full_name ~context ~state

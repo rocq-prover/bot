@@ -139,7 +139,7 @@ let test_jobs_helper () =
     [repositories.rocq.jobs]
     bench_job = "bench"
     use_rocq_job_status = true
-    silence_docker_manifest_errors = true
+    silence_docker_manifest_errors = true 
     doc_artifact_jobs = ["doc:refman", "doc:stdlib"]
     |}
   in

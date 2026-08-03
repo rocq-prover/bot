@@ -25,7 +25,8 @@ val send_status_check :
   -> unit
   -> unit Lwt.t
 
-val trace_action : repo_full_name:string -> string -> build_failure Lwt.t
+val trace_action :
+  silence_docker_manifest_errors:bool -> string -> build_failure Lwt.t
 
 val job_failure :
      bot_info:Bot_components.Bot_info.t
@@ -38,6 +39,7 @@ val job_failure :
   -> context:string
   -> failure_reason:string
   -> external_id:string
+  -> silence_docker_manifest_errors:bool
   -> ?summary_builder:(string list -> string -> string Lwt.t)
   -> ?allow_failure_handler:
        (   bot_info:Bot_components.Bot_info.t
