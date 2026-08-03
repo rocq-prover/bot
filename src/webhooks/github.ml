@@ -294,14 +294,17 @@ let handle_github_webhook ~bot_info ~key ~app_id ~github_bot_name
              issue.repo issue.number )
         ()
   | Ok
-      ( Some (1062161 as install_id) (* Rocq's installation number *)
+      ( Some install_id
       , PullRequestCardEdited
-          { project_number= 11 (* Rocq's backporting project number *)
+          { project_number
           ; pr_id
           ; field
           ; old_value= Some "Request inclusion"
           ; new_value= Some "Rejected" } )
-    when String.is_suffix ~suffix:" status" field ->
+    when String.is_suffix ~suffix:" status" field
+         && Option.is_some
+              (Repo_config.find_by_backport_project ~install_id ~project_number
+                 repo_config_table ) ->
       let backport_to = String.drop_suffix field 7 in
       (fun () ->
         Bot_components.Github_installations.action_as_github_app_from_install_id
