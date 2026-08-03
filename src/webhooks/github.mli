@@ -7,6 +7,7 @@ val handle_github_webhook :
   -> github_bot_name:string
   -> gitlab_mapping:(string, string) Base.Hashtbl.t
   -> github_mapping:(string, string * string) Base.Hashtbl.t
+  -> repo_config_table:(string, Repo_config.t) Base.Hashtbl.t
   -> github_webhook_secret:string
   -> headers:Cohttp.Header.t
   -> body:string Lwt.t

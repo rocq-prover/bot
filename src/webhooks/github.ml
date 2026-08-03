@@ -211,8 +211,8 @@ let handle_comment_created ~bot_info ~key ~app_id ~github_bot_name
               () ) )
 
 let handle_github_webhook ~bot_info ~key ~app_id ~github_bot_name
-    ~gitlab_mapping ~github_mapping ~github_webhook_secret ~headers ~body
-    ~minimize_text_of_body ~ci_minimize_text_of_body
+    ~gitlab_mapping ~github_mapping ~repo_config_table ~github_webhook_secret
+    ~headers ~body ~minimize_text_of_body ~ci_minimize_text_of_body
     ~resume_ci_minimize_text_of_body =
   body
   >>= fun body ->
@@ -228,9 +228,20 @@ let handle_github_webhook ~bot_info ~key ~app_id ~github_bot_name
       (fun () ->
         init_git_bare_repository ~bot_info
         >>= fun () ->
-        Bot_components.Github_installations.action_as_github_app_from_install_id
-          ~bot_info ~key ~app_id ~install_id
-          (Backport.rocq_push_action ~base_ref ~commits_msg)
+        let backport =
+          match
+            Repo_config.find_by_github ~owner:"rocq-prover" ~repo:"rocq"
+              repo_config_table
+          with
+          | Some cfg when Repo_config.backport_enabled cfg ->
+              Bot_components.Github_installations
+              .action_as_github_app_from_install_id ~bot_info ~key ~app_id
+                ~install_id
+                (Backport.push_action ~repo_config:cfg ~base_ref ~commits_msg)
+          | _ ->
+              Lwt.return_unit
+        in
+        backport
         <&> Bot_components.Github_installations
             .action_as_github_app_from_install_id ~bot_info ~key ~app_id
               ~install_id

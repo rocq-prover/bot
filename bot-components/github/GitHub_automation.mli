@@ -16,6 +16,8 @@ val project_action :
 
 val add_to_column :
      bot_info:Bot_info.t
+  -> organization:string
+  -> project:int
   -> backport_to:string
   -> [< `Card_ID of GitHub_ID.t | `PR_ID of GitHub_ID.t]
   -> string

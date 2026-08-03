@@ -253,10 +253,10 @@ let project_action ~bot_info ~pr_id ~backport_to () =
         | Error err ->
             Lwt_io.printlf "Error while obtaining milestone ID: %s" err ) )
 
-let add_to_column ~bot_info ~backport_to id option =
+let add_to_column ~bot_info ~organization ~project ~backport_to id option =
   let field = backport_to ^ " status" in
-  GitHub_queries.get_project_field_values ~bot_info ~organization:"rocq-prover"
-    ~project:11 ~field ~options:[|option|]
+  GitHub_queries.get_project_field_values ~bot_info ~organization ~project
+    ~field ~options:[|option|]
   >>= fun project_info ->
   ( match project_info with
     | Ok (project_id, Some (field_id, [(option', field_value_id)]))
