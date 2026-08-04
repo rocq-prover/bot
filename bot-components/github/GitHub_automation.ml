@@ -216,47 +216,10 @@ let rec adjust_milestone ~bot_info ~issue ~sleep_time =
   | Error err ->
       Lwt_io.print (f "Error: %s\n" err)
 
-let project_action ~bot_info ~pr_id ~backport_to () =
-  GitHub_queries.get_pull_request_milestone ~bot_info ~pr_id
-  >>= function
-  | Error err ->
-      Lwt_io.printf "Error: %s\n" err
-  | Ok backport_info -> (
-    match
-      List.find_map backport_info
-        ~f:(fun {backport_to= backport_to'; rejected_milestone} ->
-          if String.equal backport_to backport_to' then Some rejected_milestone
-          else None )
-    with
-    | None ->
-        Lwt_io.printf
-          "PR already not in milestone with backporting info for branch %s.\n"
-          backport_to
-    | Some rejected_milestone -> (
-        Lwt_io.printf
-          "PR is in milestone for which backporting to %s was rejected.\n\
-           Change of milestone requested.\n"
-          backport_to
-        >>= fun () ->
-        GitHub_queries.get_milestone_id ~bot_info ~owner:"rocq-prover"
-          ~repo:"rocq" ~number:rejected_milestone
-        >>= function
-        | Ok milestone ->
-            GitHub_mutations.update_milestone_pull_request ~bot_info ~pr_id
-              ~milestone
-            <&> ( GitHub_mutations.post_comment ~bot_info ~id:pr_id
-                    ~message:
-                      "This PR was postponed. Please update accordingly the \
-                       milestone of any issue that this fixes as this cannot \
-                       be done automatically."
-                >>= Utils.report_on_posting_comment )
-        | Error err ->
-            Lwt_io.printlf "Error while obtaining milestone ID: %s" err ) )
-
-let add_to_column ~bot_info ~backport_to id option =
+let add_to_column ~bot_info ~organization ~project ~backport_to id option =
   let field = backport_to ^ " status" in
-  GitHub_queries.get_project_field_values ~bot_info ~organization:"rocq-prover"
-    ~project:11 ~field ~options:[|option|]
+  GitHub_queries.get_project_field_values ~bot_info ~organization ~project
+    ~field ~options:[|option|]
   >>= fun project_info ->
   ( match project_info with
     | Ok (project_id, Some (field_id, [(option', field_value_id)]))

@@ -81,6 +81,48 @@ let test_find_miss () =
     (Option.is_none
        (Repo_config.find_by_github ~owner:"other" ~repo:"repo" tbl) )
 
+let test_backport_enabled () =
+  let with_project =
+    parse
+      {|
+    [repositories.rocq]
+    github = "rocq-prover/rocq"
+    github_installation_id = 102161
+    org_name = "rocq-prover"
+
+    [repositories.rocq.backporting]
+    github_project_number = 11
+    |}
+  in
+  let without_project =
+    parse {|
+    [repositories.demo]
+    github = "my-org/my-repo"
+    |}
+  in
+  let cfg_on =
+    Option.value_exn
+      (Repo_config.find_by_github ~owner:"rocq-prover" ~repo:"rocq" with_project)
+  in
+  let cfg_off =
+    Option.value_exn
+      (Repo_config.find_by_github ~owner:"my-org" ~repo:"my-repo"
+         without_project )
+  in
+  (check bool) "enabled" true (Repo_config.backport_enabled cfg_on) ;
+  (check bool) "disabled" false (Repo_config.backport_enabled cfg_off) ;
+  (check string) "org" "rocq-prover" (Repo_config.project_organization cfg_on) ;
+  (check string) "org fallback" "my-org"
+    (Repo_config.project_organization cfg_off) ;
+  (check bool) "card match" true
+    (Option.is_some
+       (Repo_config.find_by_backport_project ~install_id:102161
+          ~project_number:11 with_project ) ) ;
+  (check bool) "card miss" true
+    (Option.is_none
+       (Repo_config.find_by_backport_project ~install_id:102161
+          ~project_number:11 without_project ) )
+
 let () =
   run "Repo_config tests"
     [ ( "parse"
@@ -88,4 +130,5 @@ let () =
         ; ("minimal config", `Quick, test_minimal_config)
         ; ("bad github", `Quick, test_bad_github)
         ; ("missing section", `Quick, test_missing_section)
-        ; ("find miss", `Quick, test_find_miss) ] ) ]
+        ; ("find miss", `Quick, test_find_miss)
+        ; ("backport enabled", `Quick, test_backport_enabled) ] ) ]

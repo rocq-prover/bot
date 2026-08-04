@@ -108,3 +108,20 @@ let find_by_github ~owner ~repo tbl =
         String.equal cfg.github_owner owner && String.equal cfg.github_repo repo
       then Some cfg
       else None )
+
+let project_organization cfg =
+  Option.value cfg.org_name ~default:cfg.github_owner
+
+let backport_enabled cfg = Option.is_some cfg.backporting.github_project_number
+
+let find_by_backport_project ~install_id ~project_number tbl =
+  Hashtbl.to_alist tbl
+  |> List.find_map ~f:(fun (_key, cfg) ->
+      match
+        (cfg.github_installation_id, cfg.backporting.github_project_number)
+      with
+      | Some iid, Some pn
+        when Int.equal iid install_id && Int.equal pn project_number ->
+          Some cfg
+      | _ ->
+          None )

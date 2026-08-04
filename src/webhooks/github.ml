@@ -211,8 +211,8 @@ let handle_comment_created ~bot_info ~key ~app_id ~github_bot_name
               () ) )
 
 let handle_github_webhook ~bot_info ~key ~app_id ~github_bot_name
-    ~gitlab_mapping ~github_mapping ~github_webhook_secret ~headers ~body
-    ~minimize_text_of_body ~ci_minimize_text_of_body
+    ~gitlab_mapping ~github_mapping ~repo_config_table ~github_webhook_secret
+    ~headers ~body ~minimize_text_of_body ~ci_minimize_text_of_body
     ~resume_ci_minimize_text_of_body =
   body
   >>= fun body ->
@@ -228,9 +228,20 @@ let handle_github_webhook ~bot_info ~key ~app_id ~github_bot_name
       (fun () ->
         init_git_bare_repository ~bot_info
         >>= fun () ->
-        Bot_components.Github_installations.action_as_github_app_from_install_id
-          ~bot_info ~key ~app_id ~install_id
-          (Backport.rocq_push_action ~base_ref ~commits_msg)
+        let backport =
+          match
+            Repo_config.find_by_github ~owner:"rocq-prover" ~repo:"rocq"
+              repo_config_table
+          with
+          | Some cfg when Repo_config.backport_enabled cfg ->
+              Bot_components.Github_installations
+              .action_as_github_app_from_install_id ~bot_info ~key ~app_id
+                ~install_id
+                (Backport.push_action ~repo_config:cfg ~base_ref ~commits_msg)
+          | _ ->
+              Lwt.return_unit
+        in
+        backport
         <&> Bot_components.Github_installations
             .action_as_github_app_from_install_id ~bot_info ~key ~app_id
               ~install_id
@@ -283,27 +294,41 @@ let handle_github_webhook ~bot_info ~key ~app_id ~github_bot_name
              issue.repo issue.number )
         ()
   | Ok
-      ( Some (1062161 as install_id) (* Rocq's installation number *)
+      ( Some install_id
       , PullRequestCardEdited
-          { project_number= 11 (* Rocq's backporting project number *)
+          { project_number
           ; pr_id
           ; field
           ; old_value= Some "Request inclusion"
           ; new_value= Some "Rejected" } )
-    when String.is_suffix ~suffix:" status" field ->
-      let backport_to = String.drop_suffix field 7 in
-      (fun () ->
-        Bot_components.Github_installations.action_as_github_app_from_install_id
-          ~bot_info ~key ~app_id ~install_id (fun ~bot_info ->
-            GitHub_automation.project_action ~bot_info ~pr_id ~backport_to () ) )
-      |> Lwt.async ;
-      Server.respond_string ~status:`OK
-        ~body:
-          (f
-             "PR proposed for backporting was rejected from inclusion in %s. \
-              Updating the milestone."
-             backport_to )
-        ()
+    when String.is_suffix ~suffix:" status" field -> (
+    match
+      Repo_config.find_by_backport_project ~install_id ~project_number
+        repo_config_table
+    with
+    | None ->
+        Server.respond_string ~status:`OK
+          ~body:
+            "Pull request card edition ignored: backporting project not \
+             configured."
+          ()
+    | Some repo_config ->
+        (* Field matches "<branch> status" (checked above); drop " status". *)
+        let backport_to = String.drop_suffix field 7 in
+        (fun () ->
+          Bot_components.Github_installations
+          .action_as_github_app_from_install_id ~bot_info ~key ~app_id
+            ~install_id (fun ~bot_info ->
+              Backport.project_action ~bot_info ~repo_config ~pr_id ~backport_to
+                () ) )
+        |> Lwt.async ;
+        Server.respond_string ~status:`OK
+          ~body:
+            (f
+               "PR proposed for backporting was rejected from inclusion in %s. \
+                Updating the milestone."
+               backport_to )
+          () )
   | Ok (_, PullRequestCardEdited _) ->
       Server.respond_string ~status:`OK
         ~body:"Unsupported pull request card edition." ()

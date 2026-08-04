@@ -25,3 +25,10 @@ val make_repo_config_table : Toml.Types.table -> (string, t) Base.Hashtbl.t
 
 val find_by_github :
   owner:string -> repo:string -> (string, t) Base.Hashtbl.t -> t option
+
+val project_organization : t -> string
+
+val backport_enabled : t -> bool
+
+val find_by_backport_project :
+  install_id:int -> project_number:int -> (string, t) Base.Hashtbl.t -> t option
