@@ -15,17 +15,18 @@ let test_full_config () =
     org_name = "rocq-prover"
     alert_mention = "@rocq-prover/coqbot-maintainers"
     minimizer_url = "https://example.com"
+    contributing_url = "https://example.com/CONTRIBUTING.md"
 
     [repositories.rocq.backporting]
     github_project_number = 11
 
     [[repositories.rocq.teams]]
     team_name = "contributors"
-    permission = "contribute"
+    permission = "trigger_ci"
 
     [[repositories.rocq.teams]]
     team_name = "pushers"
-    permission = "push"
+    permission = "merge_pr"
 
     [repositories.rocq.jobs]
     bench_job = "bench"
@@ -48,7 +49,19 @@ let test_full_config () =
       (check bool) "use_rocq_job_status" true cfg.jobs.use_rocq_job_status ;
       (check bool) "silence_docker_manifest_errors" true
         cfg.jobs.silence_docker_manifest_errors ;
-      (check int) "doc_artifact_jobs" 2 (List.length cfg.jobs.doc_artifact_jobs)
+      (check int) "doc_artifact_jobs" 2 (List.length cfg.jobs.doc_artifact_jobs) ;
+      (check (option string))
+        "contribute_url" (Some "https://example.com/CONTRIBUTING.md")
+        cfg.contributing_url ;
+      (check (option string))
+        "trigger_ci team" (Some "contributors")
+        (Repo_config.team_for_permission cfg "trigger_ci") ;
+      (check (option string))
+        "merge_pr team" (Some "pushers")
+        (Repo_config.team_for_permission cfg "merge_pr") ;
+      (check (option string))
+        "team mention" (Some "@rocq-prover/pushers")
+        (Repo_config.team_mention cfg ~permission:"merge_pr")
 
 let test_minimal_config () =
   let tbl = parse {|
@@ -139,7 +152,7 @@ let test_jobs_helper () =
     [repositories.rocq.jobs]
     bench_job = "bench"
     use_rocq_job_status = true
-    silence_docker_manifest_errors = true 
+    silence_docker_manifest_errors = true
     doc_artifact_jobs = ["doc:refman", "doc:stdlib"]
     |}
   in
@@ -182,6 +195,42 @@ let test_jobs_helper () =
     "job url missing" None
     (Repo_config.gitlab_job_url cfg_off ~job_id:1)
 
+let test_welcome_message () =
+  let with_url =
+    parse
+      {|
+    [repositories.rocq]
+    github = "rocq-prover/rocq"
+    contributing_url = "https://example.com/CONTRIBUTING.md"
+    |}
+  in
+  let without_url =
+    parse {|
+    [repositories.demo]
+    github = "my-org/my-repo"
+    |}
+  in
+  let cfg_on =
+    Option.value_exn
+      (Repo_config.find_by_github ~owner:"rocq-prover" ~repo:"rocq" with_url)
+  in
+  let cfg_off =
+    Option.value_exn
+      (Repo_config.find_by_github ~owner:"my-org" ~repo:"my-repo" without_url)
+  in
+  (check bool) "with url + opened + same branch" true
+    (Repo_config.should_send_welcome_message cfg_on ~opened:true
+       ~same_branch_name:true ) ;
+  (check bool) "without url" false
+    (Repo_config.should_send_welcome_message cfg_off ~opened:true
+       ~same_branch_name:true ) ;
+  (check bool) "different branch" false
+    (Repo_config.should_send_welcome_message cfg_on ~opened:true
+       ~same_branch_name:false ) ;
+  (check bool) "not opened" false
+    (Repo_config.should_send_welcome_message cfg_on ~opened:false
+       ~same_branch_name:true )
+
 let () =
   run "Repo_config tests"
     [ ( "parse"
@@ -191,4 +240,5 @@ let () =
         ; ("missing section", `Quick, test_missing_section)
         ; ("find miss", `Quick, test_find_miss)
         ; ("backport enabled", `Quick, test_backport_enabled)
-        ; ("jobs", `Quick, test_jobs_helper) ] ) ]
+        ; ("jobs", `Quick, test_jobs_helper)
+        ; ("welcome message", `Quick, test_welcome_message) ] ) ]
