@@ -308,8 +308,12 @@ let handle_github_webhook ~bot_info ~key ~app_id ~github_bot_name
     with
     | None ->
         Server.respond_string ~status:`OK
-          ~body:"Unsupported pull request card edition." ()
+          ~body:
+            "Pull request card edition ignored: backporting project not \
+             configured."
+          ()
     | Some repo_config ->
+        (* Field matches "<branch> status" (checked above); drop " status". *)
         let backport_to = String.drop_suffix field 7 in
         (fun () ->
           Bot_components.Github_installations
