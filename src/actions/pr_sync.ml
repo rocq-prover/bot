@@ -8,7 +8,7 @@ open Utils
 open Lwt.Infix
 
 (* TODO: ensure there's no race condition for 2 push with very close timestamps *)
-let update_pr ?full_ci ?(skip_author_check = false) ~bot_info
+let update_pr ?full_ci ?(skip_author_check = false) ?repo_config ~bot_info
     (pr_info : issue_info pull_request_info) ~gitlab_mapping ~github_mapping =
   let open Lwt_result.Infix in
   (* Try as much as possible to get unique refnames for local branches. *)
@@ -37,27 +37,31 @@ let update_pr ?full_ci ?(skip_author_check = false) ~bot_info
        circumventing the fact that the bench job is a manual job by changing
        the CI configuration. *)
     let* can_trigger_ci =
-      if
-        String.equal pr_info.issue.issue.owner "rocq-prover"
-        && String.equal pr_info.issue.issue.repo "rocq"
-        && not skip_author_check
-      then
-        let* config_modified =
-          git_test_modified ~base:pr_info.base.sha ~head:pr_info.head.sha
-            ".*gitlab.*\\.yml"
-        in
-        if config_modified then (
-          Lwt.async (fun () ->
-              Lwt_io.printlf
-                "CI configuration modified in PR rocq-prover/rocq#%d, checking \
-                 if %s is a member of @rocq-prover/contributors..."
-                pr_info.issue.number pr_info.issue.user ) ;
-          (* This is an approximation:
+      match (repo_config, skip_author_check) with
+      | Some cfg, false -> (
+        match Repo_config.team_for_permission cfg "trigger_ci" with
+        | None ->
+            Lwt.return_ok true
+        | Some team ->
+            let org = Repo_config.project_organization cfg in
+            let* config_modified =
+              git_test_modified ~base:pr_info.base.sha ~head:pr_info.head.sha
+                ".*gitlab.*\\.yml"
+            in
+            if config_modified then (
+              Lwt.async (fun () ->
+                  Lwt_io.printlf
+                    "CI configuration modified in PR %s/%s#%d, checking if %s \
+                     is a member of @%s/%s..."
+                    pr_info.issue.issue.owner pr_info.issue.issue.repo
+                    pr_info.issue.number pr_info.issue.user org team ) ;
+              (* This is an approximation:
              we are checking who the PR author is and not who is pushing. *)
-          GitHub_queries.get_team_membership ~bot_info ~org:"rocq-prover"
-            ~team:"contributors" ~user:pr_info.issue.user )
-        else Lwt.return_ok true
-      else Lwt.return_ok true
+              GitHub_queries.get_team_membership ~bot_info ~org ~team
+                ~user:pr_info.issue.user )
+            else Lwt.return_ok true )
+      | _ ->
+          Lwt.return_ok true
     in
     let open Lwt.Infix in
     if not can_trigger_ci then (
@@ -77,58 +81,59 @@ let update_pr ?full_ci ?(skip_author_check = false) ~bot_info
          2. if there was a special label set, we run a full CI
       *)
       let get_options =
-        if
-          String.equal pr_info.issue.issue.owner "rocq-prover"
-          && String.equal pr_info.issue.issue.repo "rocq"
-        then
-          Lwt.all
-            [ ( git_test_modified ~base:pr_info.base.sha ~head:pr_info.head.sha
-                  "dev/ci/docker/.*Dockerfile.*"
-              >>= function
-              | Ok true ->
-                  Lwt.return {|-o ci.variable="SKIP_DOCKER=false"|}
-              | Ok false ->
-                  Lwt.return ""
-              | Error e ->
-                  Lwt_io.printf
-                    "Error while checking if something has changed in \
-                     dev/ci/docker:\n\
-                     %s\n"
-                    e
-                  >>= fun () -> Lwt.return "" )
-            ; (let request_full_ci_label = "request: full CI" in
-               match full_ci with
-               | Some false ->
-                   (* Light CI requested *)
-                   GitHub_automation.add_labels_if_absent ~bot_info
-                     pr_info.issue [needs_full_ci_label] ;
-                   Lwt.return {| -o ci.variable="FULL_CI=false" |}
-               | Some true ->
-                   (* Full CI requested *)
-                   GitHub_automation.remove_labels_if_present ~bot_info
-                     pr_info.issue
-                     [needs_full_ci_label; request_full_ci_label] ;
-                   Lwt.return {| -o ci.variable="FULL_CI=true" |}
-               | None ->
-                   (* Nothing requested with the command,
-                      check if the request label is present *)
-                   if
-                     pr_info.issue.labels
-                     |> List.exists ~f:(fun l ->
-                         String.equal l request_full_ci_label )
-                   then (
+        match repo_config with
+        | Some cfg
+          when Option.is_some (Repo_config.team_for_permission cfg "trigger_ci")
+          ->
+            Lwt.all
+              [ ( git_test_modified ~base:pr_info.base.sha
+                    ~head:pr_info.head.sha "dev/ci/docker/.*Dockerfile.*"
+                >>= function
+                | Ok true ->
+                    Lwt.return {|-o ci.variable="SKIP_DOCKER=false"|}
+                | Ok false ->
+                    Lwt.return ""
+                | Error e ->
+                    Lwt_io.printf
+                      "Error while checking if something has changed in \
+                       dev/ci/docker:\n\
+                       %s\n"
+                      e
+                    >>= fun () -> Lwt.return "" )
+              ; (let request_full_ci_label = "request: full CI" in
+                 match full_ci with
+                 | Some false ->
+                     (* Light CI requested *)
+                     GitHub_automation.add_labels_if_absent ~bot_info
+                       pr_info.issue [needs_full_ci_label] ;
+                     Lwt.return {| -o ci.variable="FULL_CI=false" |}
+                 | Some true ->
                      (* Full CI requested *)
                      GitHub_automation.remove_labels_if_present ~bot_info
                        pr_info.issue
                        [needs_full_ci_label; request_full_ci_label] ;
-                     Lwt.return {| -o ci.variable="FULL_CI=true" |} )
-                   else (
-                     (* Nothing requested *)
-                     GitHub_automation.add_labels_if_absent ~bot_info
-                       pr_info.issue [needs_full_ci_label] ;
-                     Lwt.return {| -o ci.variable="FULL_CI=false" |} ) ) ]
-          >|= fun options -> String.concat ~sep:" " options
-        else Lwt.return ""
+                     Lwt.return {| -o ci.variable="FULL_CI=true" |}
+                 | None ->
+                     (* Nothing requested with the command,
+                      check if the request label is present *)
+                     if
+                       pr_info.issue.labels
+                       |> List.exists ~f:(fun l ->
+                           String.equal l request_full_ci_label )
+                     then (
+                       (* Full CI requested *)
+                       GitHub_automation.remove_labels_if_present ~bot_info
+                         pr_info.issue
+                         [needs_full_ci_label; request_full_ci_label] ;
+                       Lwt.return {| -o ci.variable="FULL_CI=true" |} )
+                     else (
+                       (* Nothing requested *)
+                       GitHub_automation.add_labels_if_absent ~bot_info
+                         pr_info.issue [needs_full_ci_label] ;
+                       Lwt.return {| -o ci.variable="FULL_CI=false" |} ) ) ]
+            >|= fun options -> String.concat ~sep:" " options
+        | _ ->
+            Lwt.return ""
       in
       (* Force push *)
       get_options
@@ -163,51 +168,61 @@ let update_pr ?full_ci ?(skip_author_check = false) ~bot_info
     | Error e ->
         Lwt.return (Error e) )
 
-let run_ci_action ~bot_info ~comment_info ?full_ci ~gitlab_mapping
+let run_ci_action ~bot_info ~comment_info ?full_ci ~repo_config ~gitlab_mapping
     ~github_mapping () =
-  let team = "contributors" in
-  (fun () ->
-    (let open Lwt_result.Infix in
-     GitHub_queries.get_team_membership ~bot_info ~org:"rocq-prover" ~team
-       ~user:comment_info.author
-     >>= (fun is_member ->
-     if is_member then
-       let open Lwt.Syntax in
-       let* () = Lwt_io.printl "Authorized user: pushing to GitLab." in
-       match comment_info.pull_request with
-       | Some pr_info ->
-           update_pr ?full_ci ~skip_author_check:true pr_info ~bot_info
-             ~gitlab_mapping ~github_mapping
-       | None ->
-           let {owner; repo; number} = comment_info.issue.issue in
-           GitHub_queries.get_pull_request_refs ~bot_info ~owner ~repo ~number
-           >>= fun pr_info ->
-           update_pr ?full_ci ~skip_author_check:true
-             {pr_info with issue= comment_info.issue}
-             ~bot_info ~gitlab_mapping ~github_mapping
-     else
-       (* We inform the author of the request that they are not authorized. *)
-       GitHub_automation.inform_user_not_in_contributors ~bot_info ~comment_info
-       |> Lwt_result.ok )
-     |> Fn.flip Lwt_result.bind_lwt_error (fun err ->
-         Lwt_io.printf "Error: %s\n" err ) )
-    >>= fun _ -> Lwt.return_unit )
-  |> Lwt.async ;
-  Server.respond_string ~status:`OK
-    ~body:
-      (f
-         "Received a request to run CI: checking that @%s is a member of \
-          @%s/%s before doing so."
-         comment_info.author comment_info.issue.issue.owner team )
-    ()
+  let org = Repo_config.project_organization repo_config in
+  match Repo_config.team_for_permission repo_config "trigger_ci" with
+  | None ->
+      Server.respond_string ~status:`OK
+        ~body:"Ignoring run CI request: no trigger_ci team configured." ()
+  | Some team ->
+      (fun () ->
+        (let open Lwt_result.Infix in
+         GitHub_queries.get_team_membership ~bot_info ~org ~team
+           ~user:comment_info.author
+         >>= (fun is_member ->
+         if is_member then
+           let open Lwt.Syntax in
+           let* () = Lwt_io.printl "Authorized user: pushing to GitLab." in
+           match comment_info.pull_request with
+           | Some pr_info ->
+               update_pr ?full_ci ~skip_author_check:true pr_info ~repo_config
+                 ~bot_info ~gitlab_mapping ~github_mapping
+           | None ->
+               let {owner; repo; number} = comment_info.issue.issue in
+               GitHub_queries.get_pull_request_refs ~bot_info ~owner ~repo
+                 ~number
+               >>= fun pr_info ->
+               update_pr ?full_ci ~skip_author_check:true
+                 {pr_info with issue= comment_info.issue}
+                 ~repo_config ~bot_info ~gitlab_mapping ~github_mapping
+         else
+           (* We inform the author of the request that they are not authorized. *)
+           GitHub_automation.inform_user_not_in_contributors ~bot_info ~org
+             ~team ~comment_info
+           |> Lwt_result.ok )
+         |> Fn.flip Lwt_result.bind_lwt_error (fun err ->
+             Lwt_io.printf "Error: %s\n" err ) )
+        >>= fun _ -> Lwt.return_unit )
+      |> Lwt.async ;
+      Server.respond_string ~status:`OK
+        ~body:
+          (f
+             "Received a request to run CI: checking that @%s is a member of \
+              @%s/%s before doing so."
+             comment_info.author org team )
+        ()
 
 let pull_request_updated_action ~bot_info
     ~(action : GitHub_types.pull_request_action)
     ~(pr_info : GitHub_types.issue_info GitHub_types.pull_request_info)
-    ~gitlab_mapping ~github_mapping =
-  ( match (action, pr_info.base.branch.repo_url) with
-  | PullRequestOpened, "https://github.com/rocq-prover/rocq"
-    when String.equal pr_info.base.branch.name pr_info.head.branch.name ->
+    ~repo_config ~gitlab_mapping ~github_mapping =
+  ( match (action, repo_config) with
+  | PullRequestOpened, Some cfg
+    when Repo_config.should_send_welcome_message cfg ~opened:true
+           ~same_branch_name:
+             (String.equal pr_info.base.branch.name pr_info.head.branch.name) ->
+      let contributing_url = Option.value_exn cfg.contributing_url in
       (fun () ->
         GitHub_mutations.post_comment ~bot_info ~id:pr_info.issue.id
           ~message:
@@ -216,14 +231,14 @@ let pull_request_updated_action ~bot_info
                 In the future, we strongly recommend that you *do not* use %s \
                 as the name of your branch when submitting a pull request.\n\
                 By the way, you may be interested in reading [our contributing \
-                guide](https://github.com/rocq-prover/rocq/blob/master/CONTRIBUTING.md)."
-               pr_info.base.branch.name )
+                guide](%s)."
+               pr_info.base.branch.name contributing_url )
         >>= Utils.report_on_posting_comment )
       |> Lwt.async
   | _ ->
       () ) ;
   (fun () ->
-    update_pr pr_info ~bot_info ~gitlab_mapping ~github_mapping
+    update_pr pr_info ?repo_config ~bot_info ~gitlab_mapping ~github_mapping
     >>= fun _ -> Lwt.return_unit )
   |> Lwt.async ;
   Server.respond_string ~status:`OK

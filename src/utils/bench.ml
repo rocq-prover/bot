@@ -231,8 +231,8 @@ let update_bench_status ~bot_info ~job_info (gh_owner, gh_repo) ~external_id
           | _ ->
               Lwt_io.printlf "Unknown state for bench job: %s" state ) )
 
-let run_bench ~bot_info ?(org = "rocq-prover") ?(team = "contributors")
-    ?(gitlab_domain = "gitlab.inria.fr") ?key_value_pairs comment_info =
+let run_bench ~bot_info ~org ~team ~gitlab_domain ?key_value_pairs comment_info
+    =
   (* Do we want to use this more often? *)
   let open Lwt.Syntax in
   let pr = comment_info.issue in
@@ -302,4 +302,5 @@ let run_bench ~bot_info ?(org = "rocq-prover") ?(team = "contributors")
       >>= Utils.report_on_posting_comment
   | Ok false, _ ->
       (* User not found in the team *)
-      GitHub_automation.inform_user_not_in_contributors ~bot_info ~comment_info
+      GitHub_automation.inform_user_not_in_contributors ~bot_info ~org ~team
+        ~comment_info
