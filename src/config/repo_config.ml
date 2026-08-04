@@ -167,4 +167,3 @@ let gitlab_pages_artifact_url cfg ~job_id ~artifact =
            repo job_id artifact )
   | _ ->
       None
-

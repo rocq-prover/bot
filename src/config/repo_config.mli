@@ -44,4 +44,3 @@ val gitlab_job_url : t -> job_id:int -> string option
 
 val gitlab_pages_artifact_url :
   t -> job_id:int -> artifact:string -> string option
-
