@@ -1,5 +1,11 @@
 val merge_pull_request_action :
-  bot_info:Bot_info.t -> ?t:float -> GitHub_types.comment_info -> unit Lwt.t
+     bot_info:Bot_info.t
+  -> org:string
+  -> pushers_team:string
+  -> ?alert_mention:string
+  -> ?t:float
+  -> GitHub_types.comment_info
+  -> unit Lwt.t
 
 val adjust_milestone :
      bot_info:Bot_info.t
@@ -41,4 +47,8 @@ val remove_labels_if_present :
   bot_info:Bot_info.t -> GitHub_types.issue_info -> string list -> unit
 
 val inform_user_not_in_contributors :
-  bot_info:Bot_info.t -> comment_info:GitHub_types.comment_info -> unit Lwt.t
+     bot_info:Bot_info.t
+  -> org:string
+  -> team:string
+  -> comment_info:GitHub_types.comment_info
+  -> unit Lwt.t
