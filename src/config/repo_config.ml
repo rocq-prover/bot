@@ -23,6 +23,7 @@ type t =
   ; alert_mention: string option
   ; teams: team_permission list
   ; minimizer_url: string option
+  ; contributing_url: string option
   ; jobs: repo_jobs_config }
 
 let default_jobs =
@@ -92,6 +93,7 @@ let parse_one tbl key =
           ; alert_mention= subkey_value tbl key "alert_mention"
           ; teams= parse_teams tbl key
           ; minimizer_url= subkey_value tbl key "minimizer_url"
+          ; contributing_url= subkey_value tbl key "contributing_url"
           ; jobs= parse_jobs tbl key }
       | _ ->
           failwith
@@ -167,3 +169,17 @@ let gitlab_pages_artifact_url cfg ~job_id ~artifact =
            repo job_id artifact )
   | _ ->
       None
+
+let team_for_permission cfg permission =
+  List.find_map cfg.teams ~f:(fun t ->
+      if String.equal t.permission permission then Some t.team_name else None )
+
+let team_mention cfg ~permission =
+  match team_for_permission cfg permission with
+  | None ->
+      None
+  | Some team ->
+      Some (f "@%s/%s" (project_organization cfg) team)
+
+let should_send_welcome_message cfg ~same_branch_name ~opened =
+  opened && same_branch_name && Option.is_some cfg.contributing_url

@@ -20,6 +20,7 @@ type t =
   ; alert_mention: string option
   ; teams: team_permission list
   ; minimizer_url: string option
+  ; contributing_url: string option
   ; jobs: repo_jobs_config }
 
 val make_repo_config_table : Toml.Types.table -> (string, t) Base.Hashtbl.t
@@ -44,3 +45,10 @@ val gitlab_job_url : t -> job_id:int -> string option
 
 val gitlab_pages_artifact_url :
   t -> job_id:int -> artifact:string -> string option
+
+val team_for_permission : t -> string -> string option
+
+val team_mention : t -> permission:string -> string option
+
+val should_send_welcome_message :
+  t -> same_branch_name:bool -> opened:bool -> bool

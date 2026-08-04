@@ -50,6 +50,7 @@ app_id="31373"
  # Full GitHub @-mention used when the bot needs to alert someone
  alert_mention = "@rocq-prover/coqbot-maintainers"
  minimizer_url = "https://github.com/rocq-community/run-coq-bug-minimizer/actions"
+ contributing_url = "https://github.com/rocq-prover/rocq/blob/master/CONTRIBUTING.md"
 
  [repositories.rocq.backporting]
  github_project_number = 11
