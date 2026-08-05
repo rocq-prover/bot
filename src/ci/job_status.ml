@@ -266,7 +266,7 @@ let job_success_or_pending ~bot_info (gh_owner, gh_repo) job_info ~gitlab_domain
 
 let pipeline_action ~bot_info ({common_info= {http_repo_url}} as pipeline_info)
     ~gitlab_mapping ?(full_ci_check_repo = None)
-    ?(auto_minimize_on_failure = None) () =
+    ?(auto_minimize_on_failure = None) ?(minimizer_url = None) () =
   let pr_number, _ = pr_from_branch pipeline_info.common_info.branch in
   match pipeline_info.state with
   | "skipped" ->
@@ -388,7 +388,7 @@ let pipeline_action ~bot_info ({common_info= {http_repo_url}} as pipeline_info)
                     ~repo:gh_repo ~pr_number
                     ~head_pipeline_summary:(Some summary)
                     ~request:Minimization.Auto ~comment_on_error:false
-                    ~options:"" ~bug_file:None
+                    ~options:"" ~bug_file:None ~minimizer_url
                     ?base_sha:pipeline_info.common_info.base_commit
                     ~head_sha:pipeline_info.common_info.head_commit ()
               | _ ->

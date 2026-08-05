@@ -692,9 +692,22 @@ let fetch_ci_minimization_info ~bot_info ~owner ~repo ~pr_number
                     |> List.map ~f:(fun ({name}, _) -> name)
                     |> String.concat ~sep:", " ) ) ) )
 
+let minimizer_status_link ~minimizer_url ~verb =
+  match minimizer_url with
+  | Some url ->
+      f "[%s minimization](%s)" verb url
+  | None ->
+      f "%s minimization" verb
+
 let minimize_failed_tests ~bot_info ~owner ~repo ~pr_number
     ~head_pipeline_summary ~request ~comment_on_error ~bug_file ~options
-    ?base_sha ?head_sha () =
+    ~(minimizer_url : string option) ?base_sha ?head_sha () =
+  match minimizer_url with
+  | None ->
+      Lwt_io.printlf
+        "Skipping CI minimization for %s/%s#%d: minimizer_url not configured."
+        owner repo pr_number
+  | Some _ ->
   let options = format_options_for_getopts options in
   accumulate_extra_minimizer_arguments options
   >>= fun minimizer_extra_arguments ->
@@ -951,12 +964,12 @@ let minimize_failed_tests ~bot_info ~owner ~repo ~pr_number
                   | _ :: _ ->
                       (* TODO: change https://github.com/rocq-community/run-coq-bug-minimizer/actions to a link to the particular action run when we can get that information *)
                       f
-                        "I am now [%s \
-                         minimization](https://github.com/rocq-community/run-coq-bug-minimizer/actions) \
-                         at commit %s on %s. I'll come back to you with the \
-                         results once it's done.%s"
-                        ( if Option.is_none bug_file then "running"
-                          else "resuming" )
+                        "I am now %s at commit %s on %s. I'll come back to you \
+                         with the results once it's done.%s"
+                        (minimizer_status_link ~minimizer_url
+                           ~verb:
+                             ( if Option.is_none bug_file then "running"
+                               else "resuming" ) )
                         head
                         (jobs_minimized |> String.concat ~sep:", ")
                         note_some_head_unfinished_msg )
@@ -1074,13 +1087,13 @@ let minimize_failed_tests ~bot_info ~owner ~repo ~pr_number
                   | _ :: _, _ ->
                       (* TODO: change https://github.com/rocq-community/run-coq-bug-minimizer/actions to a link to the particular action run when we can get that information *)
                       f
-                        "I am now [%s \
-                         minimization](https://github.com/rocq-community/run-coq-bug-minimizer/actions) \
-                         at commit %s on requested %s %s. I'll come back to \
-                         you with the results once it's done.%s\n\n\
+                        "I am now %s at commit %s on requested %s %s. I'll \
+                         come back to you with the results once it's done.%s\n\n\
                          %s"
-                        ( if Option.is_none bug_file then "running"
-                          else "resuming" )
+                        (minimizer_status_link ~minimizer_url
+                           ~verb:
+                             ( if Option.is_none bug_file then "running"
+                               else "resuming" ) )
                         head
                         (pluralize "target" successful_requests)
                         (successful_requests |> String.concat ~sep:", ")
@@ -1115,12 +1128,11 @@ let minimize_failed_tests ~bot_info ~owner ~repo ~pr_number
                   head try_again_msg failed_minimization_description
                 |> Lwt.return_some
             | RequestSuggested, _ :: _, _ ->
-                (* TODO: change https://github.com/rocq-community/run-coq-bug-minimizer/actions to a link to the particular action run when we can get that information *)
                 f
-                  "I have [initiated \
-                   minimization](https://github.com/rocq-community/run-coq-bug-minimizer/actions) \
-                   at commit %s for the suggested %s %s as requested.%s\n\n\
+                  "I have %s at commit %s for the suggested %s %s as \
+                   requested.%s\n\n\
                    %s"
+                  (minimizer_status_link ~minimizer_url ~verb:"initiated")
                   head
                   (pluralize "target" jobs_minimized)
                   (jobs_minimized |> String.concat ~sep:", ")
@@ -1290,7 +1302,7 @@ let minimize_failed_tests ~bot_info ~owner ~repo ~pr_number
         pr_number err
 
 let ci_minimize ~bot_info ~comment_info ~requests ~comment_on_error ~options
-    ~bug_file =
+    ~bug_file ~minimizer_url =
   minimize_failed_tests ~bot_info ~owner:comment_info.issue.issue.owner
     ~repo:comment_info.issue.issue.repo ~pr_number:comment_info.issue.number
     ~head_pipeline_summary:None
@@ -1302,7 +1314,7 @@ let ci_minimize ~bot_info ~comment_info ~requests ~comment_on_error ~options
           RequestAll
       | requests ->
           RequestExplicit requests )
-    ~comment_on_error ~options ~bug_file ()
+    ~comment_on_error ~options ~bug_file ~minimizer_url ()
 
 let run_coq_minimizer ~bot_info ~script ~comment_thread_id ~comment_author
     ~owner ~repo ~options ~minimizer_url =
