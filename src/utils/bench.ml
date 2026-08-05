@@ -162,7 +162,7 @@ let bench_summary_job_link_prefix ~gitlab_domain ~gitlab_owner ~gitlab_repo
     ~job_name =
   match (gitlab_domain, gitlab_owner, gitlab_repo) with
   | Some domain, Some owner, Some repo ->
-      Some (f "[%s(https://%s/%s/%s/-/jobs/)]" job_name domain owner repo)
+      Some (f "[%s](https://%s/%s/%s/-/jobs/" job_name domain owner repo)
   | _ ->
       None
 
