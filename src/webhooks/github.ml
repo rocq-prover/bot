@@ -111,11 +111,9 @@ let handle_comment_created ~bot_info ~key ~app_id ~github_bot_name
             init_git_bare_repository ~bot_info
             >>= fun () ->
             Bot_components.Github_installations.action_as_github_app ~bot_info
-              ~key ~app_id ~owner
-              (fun ~bot_info ->
+              ~key ~app_id ~owner (fun ~bot_info ->
                 Minimization.ci_minimize ~bot_info ~comment_info ~requests
-                  ~comment_on_error:true ~options ~bug_file:None
-                  ~minimizer_url ) )
+                  ~comment_on_error:true ~options ~bug_file:None ~minimizer_url ) )
           |> Lwt.async ;
           Server.respond_string ~status:`OK ~body:"Handling CI minimization." ()
       | Some _ ->
@@ -161,8 +159,7 @@ let handle_comment_created ~bot_info ~key ~app_id ~github_bot_name
           then (
             (fun () ->
               Bot_components.Github_installations.action_as_github_app ~bot_info
-                ~key ~app_id ~owner
-                (fun ~bot_info ->
+                ~key ~app_id ~owner (fun ~bot_info ->
                   GitHub_automation.merge_pull_request_action ~bot_info
                     comment_info ) )
             |> Lwt.async ;
@@ -180,8 +177,7 @@ let handle_comment_created ~bot_info ~key ~app_id ~github_bot_name
           then (
             (fun () ->
               Bot_components.Github_installations.action_as_github_app ~bot_info
-                ~key ~app_id ~owner
-                (fun ~bot_info ->
+                ~key ~app_id ~owner (fun ~bot_info ->
                   Bench.run_bench ~bot_info
                     ~key_value_pairs:[("coq_native", "yes")]
                     comment_info ) )
@@ -200,8 +196,8 @@ let handle_comment_created ~bot_info ~key ~app_id ~github_bot_name
           then (
             (fun () ->
               Bot_components.Github_installations.action_as_github_app ~bot_info
-                ~key ~app_id ~owner
-                (fun ~bot_info -> Bench.run_bench ~bot_info comment_info ) )
+                ~key ~app_id ~owner (fun ~bot_info ->
+                  Bench.run_bench ~bot_info comment_info ) )
             |> Lwt.async ;
             Server.respond_string ~status:`OK
               ~body:(f "Received a request to start the bench.")
@@ -214,22 +210,22 @@ let handle_comment_created ~bot_info ~key ~app_id ~github_bot_name
   match minimize_text_of_body body with
   | None ->
       handle_non_minimize_commands ()
-  | Some (options, script) ->
-      match minimizer_url with
-      | None ->
-          handle_non_minimize_commands ()
-      | Some minimizer_url ->
-          (fun () ->
-            init_git_bare_repository ~bot_info
-            >>= fun () ->
-            Bot_components.Github_installations.action_as_github_app ~bot_info
-              ~key ~app_id ~owner (fun ~bot_info ->
-                Minimization.run_coq_minimizer ~bot_info ~script
-                  ~comment_thread_id:comment_info.issue.id
-                  ~comment_author:comment_info.author ~owner ~repo ~options
-                  ~minimizer_url ) )
-          |> Lwt.async ;
-          Server.respond_string ~status:`OK ~body:"Handling minimization." ()
+  | Some (options, script) -> (
+    match minimizer_url with
+    | None ->
+        handle_non_minimize_commands ()
+    | Some minimizer_url ->
+        (fun () ->
+          init_git_bare_repository ~bot_info
+          >>= fun () ->
+          Bot_components.Github_installations.action_as_github_app ~bot_info
+            ~key ~app_id ~owner (fun ~bot_info ->
+              Minimization.run_coq_minimizer ~bot_info ~script
+                ~comment_thread_id:comment_info.issue.id
+                ~comment_author:comment_info.author ~owner ~repo ~options
+                ~minimizer_url ) )
+        |> Lwt.async ;
+        Server.respond_string ~status:`OK ~body:"Handling minimization." () )
 
 let handle_github_webhook ~bot_info ~key ~app_id ~github_bot_name
     ~gitlab_mapping ~github_mapping ~repo_config_table ~github_webhook_secret
@@ -373,8 +369,8 @@ let handle_github_webhook ~bot_info ~key ~app_id ~github_bot_name
             (fun () ->
               init_git_bare_repository ~bot_info
               >>= fun () ->
-              Bot_components.Github_installations.action_as_github_app
-                ~bot_info ~key ~app_id ~owner (fun ~bot_info ->
+              Bot_components.Github_installations.action_as_github_app ~bot_info
+                ~key ~app_id ~owner (fun ~bot_info ->
                   Minimization.run_coq_minimizer ~bot_info ~script
                     ~comment_thread_id:issue_info.id
                     ~comment_author:issue_info.user ~owner ~repo ~options
@@ -382,8 +378,7 @@ let handle_github_webhook ~bot_info ~key ~app_id ~github_bot_name
             |> Lwt.async ;
             Server.respond_string ~status:`OK ~body:"Handling minimization." ()
         | _ ->
-            unhandled_issue )
-      )
+            unhandled_issue ) )
   | Ok (install_id, CommentCreated comment_info) ->
       handle_comment_created ~bot_info ~key ~app_id ~github_bot_name
         ~gitlab_mapping ~github_mapping ~repo_config_table ~install_id
