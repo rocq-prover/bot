@@ -74,3 +74,45 @@ app_id="31373"
   "doc:refman", "doc:ci-refman", "doc:init",
   "doc:stdlib", "doc:stdlib:dune", "doc:ml-api:odoc"
  ]
+
+ [repositories.opam]
+ github = "rocq-prover/opam"
+ gitlab_domain = "gitlab.inria.fr"
+ gitlab_owner = "coq"
+ gitlab_repo = "opam"
+
+ [repositories.docker-rocq-prover]
+ github = "rocq-prover/docker-rocq"
+ gitlab_domain = "gitlab.inria.fr"
+ gitlab_owner = "coq"
+ gitlab_repo = "docker-rocq"
+
+ [repositories.math-comp]
+ github = "math-comp/math-comp"
+ gitlab_domain = "gitlab.inria.fr"
+ gitlab_owner = "math-comp"
+ gitlab_repo = "math-comp"
+
+ [repositories.docker-mathcomp]
+ github = "math-comp/docker-mathcomp"
+ gitlab_domain = "gitlab.inria.fr"
+ gitlab_owner = "math-comp"
+ gitlab_repo = "docker-mathcomp"
+
+ [repositories.docker-base]
+ github = "rocq-community/docker-base"
+ gitlab_domain = "gitlab.com"
+ gitlab_owner = "rocq-community"
+ gitlab_repo = "docker-base"
+
+ [repositories.docker-coq]
+ github = "rocq-community/docker-coq"
+ gitlab_domain = "gitlab.com"
+ gitlab_owner = "rocq-community"
+ gitlab_repo = "docker-coq"
+
+ [repositories.docker-rocq-community]
+ github = "rocq-community/docker-rocq"
+ gitlab_domain = "gitlab.com"
+ gitlab_owner = "rocq-community"
+ gitlab_repo = "docker-rocq"

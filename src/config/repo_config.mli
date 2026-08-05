@@ -31,6 +31,8 @@ val project_organization : t -> string
 
 val backport_enabled : t -> bool
 
+val gitlab_mirror_coords : t -> (string * string * string) option
+
 val find_by_backport_project :
   install_id:int -> project_number:int -> (string, t) Base.Hashtbl.t -> t option
 
