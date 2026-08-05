@@ -43,6 +43,8 @@ let test_full_config () =
         "project" (Some 11) cfg.backporting.github_project_number ;
       (check (option string))
         "alert" (Some "@rocq-prover/coqbot-maintainers") cfg.alert_mention ;
+      (check (option string))
+        "minimizer_url" (Some "https://example.com") cfg.minimizer_url ;
       (check int) "teams" 2 (List.length cfg.teams) ;
       (check (option string)) "bench_job" (Some "bench") cfg.jobs.bench_job ;
       (check bool) "use_rocq_job_status" true cfg.jobs.use_rocq_job_status ;
@@ -60,6 +62,7 @@ let test_minimal_config () =
       fail "expected config"
   | Some cfg ->
       (check (option int)) "project" None cfg.backporting.github_project_number ;
+      (check (option string)) "minimizer_url" None cfg.minimizer_url ;
       (check bool) "use_rocq_job_status" false cfg.jobs.use_rocq_job_status ;
       (check (list string)) "doc_artifact_jobs" [] cfg.jobs.doc_artifact_jobs
 
