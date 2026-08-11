@@ -140,4 +140,10 @@ let () =
         ; ( "empty quoted key"
           , `Quick
           , check_argument_error ~input:{|""|}
-              ~expected:"argument \"\" has an empty key" ) ] ) ]
+              ~expected:"argument \"\" has an empty key" )
+        ; ( "coq_opam_packages"
+          , `Quick
+          , check_arguments
+              ~input:{|coq_opam_packages="a b c" coq_native|}
+              ~expected:[("coq_opam_packages", Some "a b c"); ("coq_native", None)])
+        ] ) ]
