@@ -65,6 +65,20 @@ let handle_push_event_for_repos ~bot_info ~key ~app_id ~install_id ~owner ~repo
   | _ ->
       Server.respond_string ~status:`OK ~body:"Ignoring push event." ()
 
+module Commands = struct
+
+  type bench_args = (string * string option) list
+
+  type t =
+    | RunCI of { full_ci : bool option }
+    | Merge
+    | Bench of bench_args
+    | ResumeMinimize of (string * string list * Minimize_parser.minimize_parsed)
+    | Minimize of (string * string list)
+end
+
+open Commands
+
 (* Handles all comment-related events (minimization, CI commands, bench commands, etc.)*)
 let handle_comment_created ~bot_info ~key ~app_id ~github_bot_name
     ~gitlab_mapping ~github_mapping ~install_id
@@ -106,7 +120,7 @@ let handle_comment_created ~bot_info ~key ~app_id ~github_bot_name
           | "" -> None
           | _ -> failwith "Impossible group value."
         in
-        Some (`RunCI full_ci)
+        Some (RunCI {full_ci})
       else
         None
     in
@@ -115,7 +129,7 @@ let handle_comment_created ~bot_info ~key ~app_id ~github_bot_name
        ~regexp:(f "@%s:? [Mm]erge now" @@ Str.quote github_bot_name)
        body
      then
-       Some `Merge
+       Some Merge
      else
        None
     in
@@ -127,10 +141,10 @@ let handle_comment_created ~bot_info ~key ~app_id ~github_bot_name
           body
       then
         match Str.matched_group 2 body with
-        | exception _ -> Some (`Bench [])
+        | exception _ -> Some (Bench [])
         | args ->
           match parse_key_value_arguments args with
-          | Result.Ok args -> Some (`Bench args)
+          | Result.Ok args -> Some (Bench args)
           | _ -> None
       else
         None
@@ -148,15 +162,15 @@ let handle_comment_created ~bot_info ~key ~app_id ~github_bot_name
        resumption string, and we don't want to parse "resume" as an option, we
        test resumption first *)
       first_success body [
-        (fun body -> resume_ci_minimize_text_of_body body >>| fun x -> `ResumeMinimize x);
-        (fun body -> ci_minimize_text_of_body body >>| fun x -> `Minimize x);
+        (fun body -> resume_ci_minimize_text_of_body body >>| fun x -> ResumeMinimize x);
+        (fun body -> ci_minimize_text_of_body body >>| fun x -> Minimize x);
         parse_run_ci;
         parse_merge;
         parse_bench
       ]
     in
     match parse () with
-    | Some (`ResumeMinimize (options, requests, bug_file)) ->
+    | Some (ResumeMinimize (options, requests, bug_file)) ->
       (fun () ->
         init_git_bare_repository ~bot_info
         >>= fun () ->
@@ -167,7 +181,7 @@ let handle_comment_created ~bot_info ~key ~app_id ~github_bot_name
       |> Lwt.async ;
       Server.respond_string ~status:`OK
         ~body:"Handling CI minimization resumption." ()
-    | Some (`Minimize (options, requests)) ->
+    | Some (Minimize (options, requests)) ->
       (fun () ->
          init_git_bare_repository ~bot_info
          >>= fun () ->
@@ -178,7 +192,7 @@ let handle_comment_created ~bot_info ~key ~app_id ~github_bot_name
                 ~comment_on_error:true ~options ~bug_file:None ) )
       |> Lwt.async ;
       Server.respond_string ~status:`OK ~body:"Handling CI minimization." ()
-    | Some (`RunCI full_ci) when
+    | Some (RunCI {full_ci}) when
         comment_info.issue.pull_request
         && String.equal comment_info.issue.issue.owner "rocq-prover"
         && String.equal comment_info.issue.issue.repo "rocq"
@@ -189,7 +203,7 @@ let handle_comment_created ~bot_info ~key ~app_id ~github_bot_name
         ~key ~app_id ~owner:comment_info.issue.issue.owner
         (Pr_sync.run_ci_action ~comment_info ?full_ci ~gitlab_mapping
            ~github_mapping () )
-    | Some `Merge when
+    | Some Merge when
         comment_info.issue.pull_request
         && String.equal comment_info.issue.issue.owner "rocq-prover"
         && String.equal comment_info.issue.issue.repo "rocq"
@@ -204,23 +218,7 @@ let handle_comment_created ~bot_info ~key ~app_id ~github_bot_name
       Server.respond_string ~status:`OK
         ~body:(f "Received a request to merge the PR.")
         ()
-    | Some `BenchNative when
-        comment_info.issue.pull_request
-        && String.equal comment_info.issue.issue.owner "rocq-prover"
-        && String.equal comment_info.issue.issue.repo "rocq"
-        && Option.is_some install_id ->
-      (fun () ->
-         Bot_components.Github_installations.action_as_github_app ~bot_info
-           ~key ~app_id ~owner:comment_info.issue.issue.owner
-           (fun ~bot_info ->
-              Bench.run_bench ~bot_info
-                ~key_value_pairs:[("coq_native", "yes")]
-                comment_info ) )
-      |> Lwt.async ;
-      Server.respond_string ~status:`OK
-        ~body:(f "Received a request to start the bench.")
-        ()
-    | Some (`Bench args) when
+    | Some (Bench args) when
             comment_info.issue.pull_request
             && String.equal comment_info.issue.issue.owner "rocq-prover"
             && String.equal comment_info.issue.issue.repo "rocq"
