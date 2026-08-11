@@ -20,8 +20,10 @@ let () =
       , [test_case "quoted bot name" `Quick test_strip_quoted_bot_name] ) ]
 
 let tokens = Alcotest.list Alcotest.string
+
 let key_values =
-  Alcotest.list (Alcotest.pair Alcotest.string (Alcotest.option Alcotest.string))
+  Alcotest.list
+    (Alcotest.pair Alcotest.string (Alcotest.option Alcotest.string))
 
 let check_split ~input ~expected () =
   match split_on_unquoted_whitespace input with
@@ -55,9 +57,7 @@ let check_argument_error ~input ~expected () =
 let () =
   Alcotest.run "String_utils tests"
     [ ( "split_on_unquoted_whitespace"
-      , [ ( "empty input"
-          , `Quick
-          , check_split ~input:"" ~expected:[] )
+      , [ ("empty input", `Quick, check_split ~input:"" ~expected:[])
         ; ( "unquoted arguments"
           , `Quick
           , check_split ~input:"x=foo y=true" ~expected:["x=foo"; "y=true"] )
@@ -127,8 +127,8 @@ let () =
               ~expected:[("x", Some ""); ("y", Some "")] )
         ; ( "additional equal signs"
           , `Quick
-          , check_arguments ~input:"x=foo=bar"
-              ~expected:[("x", Some "foo=bar")] )
+          , check_arguments ~input:"x=foo=bar" ~expected:[("x", Some "foo=bar")]
+          )
         ; ( "missing value"
           , `Quick
           , check_arguments ~input:"x=foo missing"
@@ -143,7 +143,7 @@ let () =
               ~expected:"argument \"\" has an empty key" )
         ; ( "coq_opam_packages"
           , `Quick
-          , check_arguments
-              ~input:{|coq_opam_packages="a b c" coq_native|}
-              ~expected:[("coq_opam_packages", Some "a b c"); ("coq_native", None)])
-        ] ) ]
+          , check_arguments ~input:{|coq_opam_packages="a b c" coq_native|}
+              ~expected:
+                [("coq_opam_packages", Some "a b c"); ("coq_native", None)] ) ]
+      ) ]

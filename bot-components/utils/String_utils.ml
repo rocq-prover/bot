@@ -67,7 +67,9 @@ let split_shell_words ~preserve_syntax input =
     if index = length then
       match quote with
       | Some delimiter ->
-          Error (Printf.sprintf "unterminated %c quote" (match delimiter with Single -> '\'' | Double -> '"'))
+          Error
+            (Printf.sprintf "unterminated %c quote"
+               (match delimiter with Single -> '\'' | Double -> '"') )
       | None ->
           Ok (List.rev (finish_token token_started tokens))
     else
@@ -109,10 +111,8 @@ let split_shell_words ~preserve_syntax input =
           if index + 1 = length then Error "unterminated \" quote"
           else
             let escaped = input.[index + 1] in
-            if Char.equal escaped '\n' then
-              split (index + 2) quote true tokens
-            else if
-              List.mem ['"'; '\\'; '$'; '`'] escaped ~equal:Char.equal
+            if Char.equal escaped '\n' then split (index + 2) quote true tokens
+            else if List.mem ['"'; '\\'; '$'; '`'] escaped ~equal:Char.equal
             then (
               add_syntax char ;
               Buffer.add_char buffer escaped ;
