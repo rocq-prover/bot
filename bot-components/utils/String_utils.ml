@@ -48,6 +48,8 @@ let first_line_of_string s =
 let remove_between s i j =
   String.sub ~pos:0 ~len:i s ^ String.sub s ~pos:j ~len:(String.length s - j)
 
+type quote = Single | Double
+
 let split_shell_words ~preserve_syntax input =
   let is_whitespace = function
     | ' ' | '\t' | '\n' | '\r' | '\011' | '\012' ->
@@ -65,7 +67,7 @@ let split_shell_words ~preserve_syntax input =
     if index = length then
       match quote with
       | Some delimiter ->
-          Error (Printf.sprintf "unterminated %c quote" delimiter)
+          Error (Printf.sprintf "unterminated %c quote" (match delimiter with Single -> '\'' | Double -> '"'))
       | None ->
           Ok (List.rev (finish_token token_started tokens))
     else
@@ -85,22 +87,25 @@ let split_shell_words ~preserve_syntax input =
               add_syntax char ;
               Buffer.add_char buffer escaped ;
               split (index + 2) None true tokens )
-      | None when Char.equal char '\'' || Char.equal char '"' ->
+      | None when Char.equal char '\'' ->
           add_syntax char ;
-          split (index + 1) (Some char) true tokens
+          split (index + 1) (Some Single) true tokens
+      | None when Char.equal char '"' ->
+          add_syntax char ;
+          split (index + 1) (Some Double) true tokens
       | None ->
           Buffer.add_char buffer char ;
           split (index + 1) None true tokens
-      | Some '\'' when Char.equal char '\'' ->
+      | Some Single when Char.equal char '\'' ->
           add_syntax char ;
           split (index + 1) None true tokens
-      | Some '\'' ->
+      | Some Single ->
           Buffer.add_char buffer char ;
           split (index + 1) quote true tokens
-      | Some '"' when Char.equal char '"' ->
+      | Some Double when Char.equal char '"' ->
           add_syntax char ;
           split (index + 1) None true tokens
-      | Some '"' when Char.equal char '\\' ->
+      | Some Double when Char.equal char '\\' ->
           if index + 1 = length then Error "unterminated \" quote"
           else
             let escaped = input.[index + 1] in
@@ -115,11 +120,9 @@ let split_shell_words ~preserve_syntax input =
             else (
               Buffer.add_char buffer char ;
               split (index + 1) quote true tokens )
-      | Some '"' ->
+      | Some Double ->
           Buffer.add_char buffer char ;
           split (index + 1) quote true tokens
-      | Some _ ->
-          failwith "unsupported quote delimiter"
   in
   split 0 None false []
 
