@@ -151,17 +151,10 @@ let handle_comment_created ~bot_info ~key ~app_id ~github_bot_name
     in
     let parse () =
       let open Option in
-      let rec first_success body fns =
-        match fns with
-        | fn :: fns ->
-          let res = fn body in
-          if Option.is_some res then res else first_success body fns
-        | [] -> None
-      in
     (* Since both ci minimization resumption and ci minimization will match the
        resumption string, and we don't want to parse "resume" as an option, we
        test resumption first *)
-      first_success body [
+      List.find_map ~f:(fun fn -> fn body) [
         (fun body -> resume_ci_minimize_text_of_body body >>| fun x -> ResumeMinimize x);
         (fun body -> ci_minimize_text_of_body body >>| fun x -> Minimize x);
         parse_run_ci;
