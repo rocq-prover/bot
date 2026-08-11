@@ -75,6 +75,7 @@ module Commands = struct
     | Bench of bench_args
     | ResumeMinimize of (string * string list * Minimize_parser.minimize_parsed)
     | Minimize of (string * string list)
+    | ParseError of string
 end
 
 open Commands
@@ -113,14 +114,11 @@ let handle_comment_created ~bot_info ~key ~app_id ~github_bot_name
             @@ Str.quote github_bot_name )
         body
       then
-        let full_ci =
-          match Str.matched_group 1 body with
-          | "full" -> Some true
-          | "light" -> Some false
-          | "" -> None
-          | _ -> failwith "Impossible group value."
-        in
-        Some (RunCI {full_ci})
+        match Str.matched_group 1 body with
+        | "full" -> Some (RunCI {full_ci=Some true})
+        | "light" -> Some (RunCI {full_ci=Some false})
+        | "" -> Some (RunCI {full_ci=None})
+        | conf -> Some (ParseError (f "run ci command: unknown CI configuration %S" conf))
       else
         None
     in
@@ -145,7 +143,8 @@ let handle_comment_created ~bot_info ~key ~app_id ~github_bot_name
         | args ->
           match parse_key_value_arguments args with
           | Result.Ok args -> Some (Bench args)
-          | _ -> None
+          | Result.Error error ->
+            Some (ParseError (f "bench command could not parse key-value arguments: %s" error))
       else
         None
     in
@@ -229,6 +228,14 @@ let handle_comment_created ~bot_info ~key ~app_id ~github_bot_name
       Server.respond_string ~status:`OK
         ~body:(f "Received a request to start the bench.")
         ()
+    | Some (ParseError error) ->
+      (fun () ->
+         GitHub_mutations.post_comment ~bot_info
+           ~message:(error)
+           ~id:comment_info.issue.id
+         >>= Utils.report_on_posting_comment)
+      |> Lwt.async;
+      Server.respond_string ~status:`OK ~body:"Invalid bench arguments." ()
     | Some (RunCI _ | Merge | Bench _) ->
       Server.respond_string ~status:`OK
         ~body:"Command recognized but not allowed in this context."
