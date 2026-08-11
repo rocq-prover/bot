@@ -236,7 +236,11 @@ let handle_comment_created ~bot_info ~key ~app_id ~github_bot_name
       Server.respond_string ~status:`OK
         ~body:(f "Received a request to start the bench.")
         ()
-    | _ ->
+    | Some (RunCI _ | Merge | Bench _) ->
+      Server.respond_string ~status:`OK
+        ~body:"Command recognized but not allowed in this context."
+        ()
+    | None ->
       Server.respond_string ~status:`OK
         ~body:(f "Unhandled comment: %s" body)
         ()
