@@ -14,11 +14,6 @@ let test_strip_quoted_bot_name () =
   in
   (check string) "strip_quoted_bot_name" expected got
 
-let () =
-  run "String_utils tests"
-    [ ( "strip_quoted_bot_name"
-      , [test_case "quoted bot name" `Quick test_strip_quoted_bot_name] ) ]
-
 let tokens = Alcotest.list Alcotest.string
 
 let key_values =
@@ -56,7 +51,9 @@ let check_argument_error ~input ~expected () =
 
 let () =
   Alcotest.run "String_utils tests"
-    [ ( "split_on_unquoted_whitespace"
+    [ ( "strip_quoted_bot_name"
+      , [test_case "quoted bot name" `Quick test_strip_quoted_bot_name] )
+    ; ( "split_on_unquoted_whitespace"
       , [ ("empty input", `Quick, check_split ~input:"" ~expected:[])
         ; ( "unquoted arguments"
           , `Quick
