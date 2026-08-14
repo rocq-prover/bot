@@ -138,7 +138,7 @@ let handle_comment_created ~bot_info ~key ~app_id ~github_bot_name
         if
           string_match
             ~regexp:
-              ( f {|@%s:? [Bb]ench\( *$\| +\([^\n]+\) *\(\n\|$\)\)|}
+              ( f "@%s:? [Bb]ench\\( *$\\| +\\(.*\\(\n.+\\)*\\)\\(\n\n\\|$\\)\\)"
               @@ Str.quote github_bot_name )
             body
         then
