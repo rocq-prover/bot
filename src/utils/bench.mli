@@ -1,5 +1,9 @@
 open Base
 
+type args = (string * string option) list
+
+val parse : github_bot_name:string -> string -> (args, string) Result.t option
+
 module BenchResults : sig
   type t =
     { summary_table: string

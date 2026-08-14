@@ -66,7 +66,7 @@ let handle_push_event_for_repos ~bot_info ~key ~app_id ~install_id ~owner ~repo
       Server.respond_string ~status:`OK ~body:"Ignoring push event." ()
 
 module Commands = struct
-  type bench_args = (string * string option) list
+  type bench_args = Bench.args
 
   type t =
     | RunCI of {full_ci: bool option}
@@ -134,28 +134,6 @@ let handle_comment_created ~bot_info ~key ~app_id ~github_bot_name
         then Some Merge
         else None
       in
-      let parse_bench body =
-        if
-          string_match
-            ~regexp:
-              ( f "@%s:? [Bb]ench\\( *$\\| +\\(.*\\(\n.+\\)*\\)\\(\n\n\\|$\\)\\)"
-              @@ Str.quote github_bot_name )
-            body
-        then
-          match Str.matched_group 2 body with
-          | exception _ ->
-              Some (Bench [])
-          | args -> (
-            match parse_key_value_arguments args with
-            | Result.Ok args ->
-                Some (Bench args)
-            | Result.Error error ->
-                Some
-                  (ParseError
-                     (f "bench command could not parse key-value arguments: %s"
-                        error ) ) )
-        else None
-      in
       let parse () =
         let open Option in
         (* Since both ci minimization resumption and ci minimization will match the
@@ -168,7 +146,13 @@ let handle_comment_created ~bot_info ~key ~app_id ~github_bot_name
           ; (fun body -> ci_minimize_text_of_body body >>| fun x -> Minimize x)
           ; parse_run_ci
           ; parse_merge
-          ; parse_bench ]
+          ; (fun body ->
+              Bench.parse ~github_bot_name body
+              >>| function
+              | Result.Ok args ->
+                  Commands.Bench args
+              | Result.Error error ->
+                  ParseError error ) ]
       in
       match parse () with
       | Some (ResumeMinimize (options, requests, bug_file)) ->
