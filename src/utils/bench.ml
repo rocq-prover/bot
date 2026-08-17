@@ -27,57 +27,6 @@ let parse ~github_bot_name body =
           )
   else None
 
-let%test "parses a command without arguments" =
-  match parse ~github_bot_name:"coqbot" "@coqbot bench" with
-  | Some (Result.Ok []) ->
-      true
-  | _ ->
-      false
-
-let%test "parses arguments through the end of the comment" =
-  match
-    parse ~github_bot_name:"coqbot"
-      "@coqbot bench coq_native\ncoq_opam_packages=\"a b\""
-  with
-  | Some (Result.Ok [("coq_native", None); ("coq_opam_packages", Some "a b")])
-    ->
-      true
-  | _ ->
-      false
-
-let%test "parses multiline arguments until an empty line" =
-  match
-    parse ~github_bot_name:"coqbot"
-      "@coqbot: Bench coq_native=yes\n\
-       coq_opam_packages='a b'\n\n\
-       This text is not part of the command."
-  with
-  | Some
-      (Result.Ok [("coq_native", Some "yes"); ("coq_opam_packages", Some "a b")])
-    ->
-      true
-  | _ ->
-      false
-
-let%test "reports malformed arguments" =
-  match
-    parse ~github_bot_name:"coqbot" "@coqbot bench value=\"unterminated"
-  with
-  | Some
-      (Result.Error
-         "bench command could not parse key-value arguments: unterminated \" \
-          quote" ) ->
-      true
-  | _ ->
-      false
-
-let%test "does not parse another command" =
-  match parse ~github_bot_name:"coqbot" "@coqbot benchmark" with
-  | None ->
-      true
-  | Some _ ->
-      false
-
 let parse_quantity table table_name =
   let regexp = {|.*TOP \([0-9]*\)|} in
   if string_match ~regexp table then

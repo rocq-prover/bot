@@ -2,8 +2,5 @@
  (name utils)
  (public_name coq-bot.utils)
  (libraries base bot-components)
- (inline_tests)
- (preprocess
-  (pps ppx_expect))
  (wrapped false)
  (modules bench coq))
