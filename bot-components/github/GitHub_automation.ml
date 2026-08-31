@@ -5,7 +5,15 @@ open Lwt.Infix
 open Git_utils
 open GitHub_GitLab_sync
 
-let rec merge_pull_request_action ~bot_info ?(t = 1.) comment_info =
+let cc_maintainers ?alert_mention () =
+  match alert_mention with
+  | None | Some "" ->
+      ""
+  | Some mention ->
+      f "\ncc %s" mention
+
+let rec merge_pull_request_action ~bot_info ~org ~pushers_team ?alert_mention
+    ?(t = 1.) comment_info =
   let pr = comment_info.issue in
   let reasons_for_not_merging =
     List.filter_opt
@@ -51,13 +59,14 @@ let rec merge_pull_request_action ~bot_info ?(t = 1.) comment_info =
             if (not comment_info.review_comment) && Option.is_none comment then
               if Float.(t > 5.) then
                 Lwt.return_error
-                  "Something unexpected happened: did not find merge comment \
-                   after retrying three times.\n\
-                   cc @rocq-prover/coqbot-maintainers"
+                  ( "Something unexpected happened: did not find merge comment \
+                     after retrying three times."
+                  ^ cc_maintainers ?alert_mention () )
               else
                 Lwt_unix.sleep t
                 >>= fun () ->
-                merge_pull_request_action ~t:(t *. 2.) ~bot_info comment_info
+                merge_pull_request_action ~t:(t *. 2.) ~bot_info ~org
+                  ~pushers_team ?alert_mention comment_info
                 >>= fun () -> Lwt.return_ok ()
             else if
               (not comment_info.review_comment)
@@ -94,17 +103,17 @@ let rec merge_pull_request_action ~bot_info ?(t = 1.) comment_info =
                         requested."
                        comment_info.author )
               | APPROVED -> (
-                  GitHub_queries.get_team_membership ~bot_info
-                    ~org:"rocq-prover" ~team:"pushers" ~user:comment_info.author
+                  GitHub_queries.get_team_membership ~bot_info ~org
+                    ~team:pushers_team ~user:comment_info.author
                   >>= function
                   | Ok false ->
                       (* User not found in the team *)
                       Lwt.return_error
                         (f
                            "@%s: You can't merge this PR because you're not a \
-                            member of the `@rocq-prover/pushers` team. Look at \
-                            the contributing guide for how to join this team."
-                           comment_info.author )
+                            member of the `@%s/%s` team. Look at the \
+                            contributing guide for how to join this team."
+                           comment_info.author org pushers_team )
                   | Ok true -> (
                       GitHub_mutations.merge_pull_request ~bot_info ~pr_id:pr.id
                         ~commit_headline:
@@ -148,16 +157,12 @@ let rec merge_pull_request_action ~bot_info ?(t = 1.) comment_info =
                           >>= fun () -> Lwt.return_ok () )
                   | Error e ->
                       Lwt.return_error
-                        (f
-                           "Something unexpected happened: %s\n\
-                            cc @rocq-prover/coqbot-maintainers"
-                           e ) ) )
+                        ( f "Something unexpected happened: %s" e
+                        ^ cc_maintainers ?alert_mention () ) ) )
         | Error e ->
             Lwt.return_error
-              (f
-                 "Something unexpected happened: %s\n\
-                  cc @rocq-prover/coqbot-maintainers"
-                 e ) ) )
+              ( f "Something unexpected happened: %s" e
+              ^ cc_maintainers ?alert_mention () ) ) )
   >>= function
   | Ok () ->
       Lwt.return_unit
@@ -351,12 +356,12 @@ let remove_labels_if_present ~bot_info (issue : issue_info) labels =
     |> add_remove_labels ~bot_info ~add:false issue )
   |> Lwt.async
 
-let inform_user_not_in_contributors ~bot_info ~comment_info =
+let inform_user_not_in_contributors ~bot_info ~org ~team ~comment_info =
   GitHub_mutations.post_comment ~bot_info ~id:comment_info.issue.id
     ~message:
       (f
-         "Sorry, @%s, I only accept requests from members of the \
-          `@rocq-prover/contributors` team. If you are a regular contributor, \
-          you can request to join the team by asking any core developer."
-         comment_info.author )
+         "Sorry, @%s, I only accept requests from members of the `@%s/%s` \
+          team. If you are a regular contributor, you can request to join the \
+          team by asking any core developer."
+         comment_info.author org team )
   >>= Utils.report_on_posting_comment

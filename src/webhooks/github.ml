@@ -67,13 +67,16 @@ let handle_push_event_for_repos ~bot_info ~key ~app_id ~install_id ~owner ~repo
 
 (* Handles all comment-related events (minimization, CI commands, bench commands, etc.)*)
 let handle_comment_created ~bot_info ~key ~app_id ~github_bot_name
-    ~gitlab_mapping ~github_mapping ~install_id
+    ~gitlab_mapping ~github_mapping ~repo_config_table ~install_id
     ~(comment_info : Bot_components.GitHub_types.comment_info)
     ~minimize_text_of_body ~ci_minimize_text_of_body
     ~resume_ci_minimize_text_of_body =
   let body =
     comment_info.body |> trim_comments |> strip_quoted_bot_name ~github_bot_name
   in
+  let owner = comment_info.issue.issue.owner in
+  let repo = comment_info.issue.issue.repo in
+  let repo_config = Repo_config.find_by_github ~owner ~repo repo_config_table in
   match minimize_text_of_body body with
   | Some (options, script) ->
       (fun () ->
@@ -127,10 +130,7 @@ let handle_comment_created ~bot_info ~key ~app_id ~github_bot_name
                 ( f "@%s:? [Rr]un \\(full\\|light\\|\\) ?[Cc][Ii]"
                 @@ Str.quote github_bot_name )
               body
-            && comment_info.issue.pull_request
-            && String.equal comment_info.issue.issue.owner "rocq-prover"
-            && String.equal comment_info.issue.issue.repo "rocq"
-            && Option.is_some install_id
+            && comment_info.issue.pull_request && Option.is_some install_id
           then
             let full_ci =
               match Str.matched_group 1 body with
@@ -143,68 +143,109 @@ let handle_comment_created ~bot_info ~key ~app_id ~github_bot_name
               | _ ->
                   failwith "Impossible group value."
             in
-            init_git_bare_repository ~bot_info
-            >>= fun () ->
-            Bot_components.Github_installations.action_as_github_app ~bot_info
-              ~key ~app_id ~owner:comment_info.issue.issue.owner
-              (Pr_sync.run_ci_action ~comment_info ?full_ci ~gitlab_mapping
-                 ~github_mapping () )
+            match repo_config with
+            | Some cfg
+              when Option.is_some
+                     (Repo_config.team_for_permission cfg "trigger_ci") ->
+                init_git_bare_repository ~bot_info
+                >>= fun () ->
+                Bot_components.Github_installations.action_as_github_app
+                  ~bot_info ~key ~app_id ~owner
+                  (Pr_sync.run_ci_action ~comment_info ?full_ci ~repo_config:cfg
+                     ~gitlab_mapping ~github_mapping () )
+            | _ ->
+                Server.respond_string ~status:`OK
+                  ~body:"Ignoring run CI request: trigger_ci not configured." ()
           else if
             string_match
               ~regexp:(f "@%s:? [Mm]erge now" @@ Str.quote github_bot_name)
               body
-            && comment_info.issue.pull_request
-            && String.equal comment_info.issue.issue.owner "rocq-prover"
-            && String.equal comment_info.issue.issue.repo "rocq"
-            && Option.is_some install_id
-          then (
-            (fun () ->
-              Bot_components.Github_installations.action_as_github_app ~bot_info
-                ~key ~app_id ~owner:comment_info.issue.issue.owner
-                (fun ~bot_info ->
-                  GitHub_automation.merge_pull_request_action ~bot_info
-                    comment_info ) )
-            |> Lwt.async ;
-            Server.respond_string ~status:`OK
-              ~body:(f "Received a request to merge the PR.")
-              () )
+            && comment_info.issue.pull_request && Option.is_some install_id
+          then
+            match repo_config with
+            | Some cfg -> (
+              match Repo_config.team_for_permission cfg "merge_pr" with
+              | Some pushers_team ->
+                  let org = Repo_config.project_organization cfg in
+                  (fun () ->
+                    Bot_components.Github_installations.action_as_github_app
+                      ~bot_info ~key ~app_id ~owner (fun ~bot_info ->
+                        GitHub_automation.merge_pull_request_action ~bot_info
+                          ~org ~pushers_team ?alert_mention:cfg.alert_mention
+                          comment_info ) )
+                  |> Lwt.async ;
+                  Server.respond_string ~status:`OK
+                    ~body:"Received a request to merge the PR." ()
+              | None ->
+                  Server.respond_string ~status:`OK
+                    ~body:"Ignoring merge request: merge_pr not configured." ()
+              )
+            | None ->
+                Server.respond_string ~status:`OK
+                  ~body:"Ignoring merge request: no repo_config." ()
           else if
             string_match
               ~regexp:(f "@%s:? [Bb]ench native" @@ Str.quote github_bot_name)
               body
-            && comment_info.issue.pull_request
-            && String.equal comment_info.issue.issue.owner "rocq-prover"
-            && String.equal comment_info.issue.issue.repo "rocq"
-            && Option.is_some install_id
-          then (
-            (fun () ->
-              Bot_components.Github_installations.action_as_github_app ~bot_info
-                ~key ~app_id ~owner:comment_info.issue.issue.owner
-                (fun ~bot_info ->
-                  Bench.run_bench ~bot_info
-                    ~key_value_pairs:[("coq_native", "yes")]
-                    comment_info ) )
-            |> Lwt.async ;
-            Server.respond_string ~status:`OK
-              ~body:(f "Received a request to start the bench.")
-              () )
+            && comment_info.issue.pull_request && Option.is_some install_id
+          then
+            match repo_config with
+            | Some cfg -> (
+              match
+                ( Repo_config.team_for_permission cfg "trigger_ci"
+                , cfg.gitlab_domain )
+              with
+              | Some team, Some gitlab_domain ->
+                  let org = Repo_config.project_organization cfg in
+                  (fun () ->
+                    Bot_components.Github_installations.action_as_github_app
+                      ~bot_info ~key ~app_id ~owner (fun ~bot_info ->
+                        Bench.run_bench ~bot_info ~org ~team ~gitlab_domain
+                          ~key_value_pairs:[("coq_native", "yes")]
+                          comment_info ) )
+                  |> Lwt.async ;
+                  Server.respond_string ~status:`OK
+                    ~body:"Received a request to start the bench." ()
+              | _ ->
+                  Server.respond_string ~status:`OK
+                    ~body:
+                      "Ignoring bench request: missing trigger_ci team or \
+                       gitlab_domain in repo_config."
+                    () )
+            | None ->
+                Server.respond_string ~status:`OK
+                  ~body:"Ignoring bench request: no repo_config." ()
           else if
             string_match
               ~regexp:(f "@%s:? [Bb]ench" @@ Str.quote github_bot_name)
               body
-            && comment_info.issue.pull_request
-            && String.equal comment_info.issue.issue.owner "rocq-prover"
-            && String.equal comment_info.issue.issue.repo "rocq"
-            && Option.is_some install_id
-          then (
-            (fun () ->
-              Bot_components.Github_installations.action_as_github_app ~bot_info
-                ~key ~app_id ~owner:comment_info.issue.issue.owner
-                (fun ~bot_info -> Bench.run_bench ~bot_info comment_info ) )
-            |> Lwt.async ;
-            Server.respond_string ~status:`OK
-              ~body:(f "Received a request to start the bench.")
-              () )
+            && comment_info.issue.pull_request && Option.is_some install_id
+          then
+            match repo_config with
+            | Some cfg -> (
+              match
+                ( Repo_config.team_for_permission cfg "trigger_ci"
+                , cfg.gitlab_domain )
+              with
+              | Some team, Some gitlab_domain ->
+                  let org = Repo_config.project_organization cfg in
+                  (fun () ->
+                    Bot_components.Github_installations.action_as_github_app
+                      ~bot_info ~key ~app_id ~owner (fun ~bot_info ->
+                        Bench.run_bench ~bot_info ~org ~team ~gitlab_domain
+                          comment_info ) )
+                  |> Lwt.async ;
+                  Server.respond_string ~status:`OK
+                    ~body:"Received a request to start the bench." ()
+              | _ ->
+                  Server.respond_string ~status:`OK
+                    ~body:
+                      "Ignoring bench request: missing trigger_ci team or \
+                       gitlab_domain in repo_config."
+                    () )
+            | None ->
+                Server.respond_string ~status:`OK
+                  ~body:"Ignoring bench request: no repo_config." ()
           else
             Server.respond_string ~status:`OK
               ~body:(f "Unhandled comment: %s" body)
@@ -275,12 +316,16 @@ let handle_github_webhook ~bot_info ~key ~app_id ~github_bot_name
              pr_info.issue.issue.number )
         ()
   | Ok (_, PullRequestUpdated (action, pr_info)) ->
+      let repo_config =
+        Repo_config.find_by_github ~owner:pr_info.issue.issue.owner
+          ~repo:pr_info.issue.issue.repo repo_config_table
+      in
       init_git_bare_repository ~bot_info
       >>= fun () ->
       Bot_components.Github_installations.action_as_github_app ~bot_info ~key
         ~app_id ~owner:pr_info.issue.issue.owner
-        (Pr_sync.pull_request_updated_action ~action ~pr_info ~gitlab_mapping
-           ~github_mapping )
+        (Pr_sync.pull_request_updated_action ~action ~pr_info ~repo_config
+           ~gitlab_mapping ~github_mapping )
   | Ok (_, IssueClosed {issue}) ->
       (* TODO: only for projects that requested this feature *)
       (fun () ->
@@ -357,8 +402,8 @@ let handle_github_webhook ~bot_info ~key ~app_id ~github_bot_name
             () )
   | Ok (install_id, CommentCreated comment_info) ->
       handle_comment_created ~bot_info ~key ~app_id ~github_bot_name
-        ~gitlab_mapping ~github_mapping ~install_id ~comment_info
-        ~minimize_text_of_body ~ci_minimize_text_of_body
+        ~gitlab_mapping ~github_mapping ~repo_config_table ~install_id
+        ~comment_info ~minimize_text_of_body ~ci_minimize_text_of_body
         ~resume_ci_minimize_text_of_body
   | Ok (None, CheckRunReRequested _) ->
       Server.respond_string ~status:(Code.status_of_code 401)
