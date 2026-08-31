@@ -5,7 +5,8 @@ open Lwt.Infix
 open Git_utils
 open GitHub_GitLab_sync
 
-let rec merge_pull_request_action ~bot_info ?(t = 1.) comment_info =
+let rec merge_pull_request_action ~bot_info ?(t = 1.) ?(merge_method = MERGE)
+    comment_info =
   let pr = comment_info.issue in
   let reasons_for_not_merging =
     List.filter_opt
@@ -57,7 +58,8 @@ let rec merge_pull_request_action ~bot_info ?(t = 1.) comment_info =
               else
                 Lwt_unix.sleep t
                 >>= fun () ->
-                merge_pull_request_action ~t:(t *. 2.) ~bot_info comment_info
+                merge_pull_request_action ~t:(t *. 2.) ~merge_method ~bot_info
+                  comment_info
                 >>= fun () -> Lwt.return_ok ()
             else if
               (not comment_info.review_comment)
@@ -118,7 +120,7 @@ let rec merge_pull_request_action ~bot_info ?(t = 1.) comment_info =
                           ^ f
                               "Co-authored-by: %s <%s@users.noreply.github.com>\n"
                               comment_info.author comment_info.author )
-                        ~merge_method:MERGE ()
+                        ~merge_method ()
                       >>= fun () ->
                       match
                         List.fold_left ~init:[] reviews_info.files
