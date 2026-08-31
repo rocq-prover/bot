@@ -67,59 +67,58 @@ let handle_push_event_for_repos ~bot_info ~key ~app_id ~install_id ~owner ~repo
 
 (* Handles all comment-related events (minimization, CI commands, bench commands, etc.)*)
 let handle_comment_created ~bot_info ~key ~app_id ~github_bot_name
-    ~gitlab_mapping ~github_mapping ~install_id
+    ~gitlab_mapping ~github_mapping ~repo_config_table ~install_id
     ~(comment_info : Bot_components.GitHub_types.comment_info)
     ~minimize_text_of_body ~ci_minimize_text_of_body
     ~resume_ci_minimize_text_of_body =
   let body =
     comment_info.body |> trim_comments |> strip_quoted_bot_name ~github_bot_name
   in
-  match minimize_text_of_body body with
-  | Some (options, script) ->
-      (fun () ->
-        init_git_bare_repository ~bot_info
-        >>= fun () ->
-        Bot_components.Github_installations.action_as_github_app ~bot_info ~key
-          ~app_id ~owner:comment_info.issue.issue.owner (fun ~bot_info ->
-            Minimization.run_coq_minimizer ~bot_info ~script
-              ~comment_thread_id:comment_info.issue.id
-              ~comment_author:comment_info.author
-              ~owner:comment_info.issue.issue.owner
-              ~repo:comment_info.issue.issue.repo ~options
-              ~minimizer_url:
-                "https://github.com/rocq-community/run-coq-bug-minimizer/actions" ) )
-      |> Lwt.async ;
-      Server.respond_string ~status:`OK ~body:"Handling minimization." ()
-  | None -> (
+  let owner = comment_info.issue.issue.owner in
+  let repo = comment_info.issue.issue.repo in
+  let minimizer_url =
+    match Repo_config.find_by_github ~owner ~repo repo_config_table with
+    | None ->
+        None
+    | Some cfg ->
+        cfg.minimizer_url
+  in
+  let handle_non_minimize_commands () =
     (* Since both ci minimization resumption and ci
        minimization will match the resumption string, and we
        don't want to parse "resume" as an option, we test
        resumption first *)
     match resume_ci_minimize_text_of_body body with
-    | Some (options, requests, bug_file) ->
+    | Some (options, requests, bug_file) when Option.is_some minimizer_url ->
         (fun () ->
           init_git_bare_repository ~bot_info
           >>= fun () ->
           Bot_components.Github_installations.action_as_github_app ~bot_info
-            ~key ~app_id ~owner:comment_info.issue.issue.owner (fun ~bot_info ->
+            ~key ~app_id ~owner (fun ~bot_info ->
               Minimization.ci_minimize ~bot_info ~comment_info ~requests
-                ~comment_on_error:true ~options ~bug_file:(Some bug_file) ) )
+                ~comment_on_error:true ~options ~bug_file:(Some bug_file)
+                ~minimizer_url ) )
         |> Lwt.async ;
         Server.respond_string ~status:`OK
           ~body:"Handling CI minimization resumption." ()
+    | Some _ ->
+        Server.respond_string ~status:`OK
+          ~body:"CI minimization not configured for this repository." ()
     | None -> (
       match ci_minimize_text_of_body body with
-      | Some (options, requests) ->
+      | Some (options, requests) when Option.is_some minimizer_url ->
           (fun () ->
             init_git_bare_repository ~bot_info
             >>= fun () ->
             Bot_components.Github_installations.action_as_github_app ~bot_info
-              ~key ~app_id ~owner:comment_info.issue.issue.owner
-              (fun ~bot_info ->
+              ~key ~app_id ~owner (fun ~bot_info ->
                 Minimization.ci_minimize ~bot_info ~comment_info ~requests
-                  ~comment_on_error:true ~options ~bug_file:None ) )
+                  ~comment_on_error:true ~options ~bug_file:None ~minimizer_url ) )
           |> Lwt.async ;
           Server.respond_string ~status:`OK ~body:"Handling CI minimization." ()
+      | Some _ ->
+          Server.respond_string ~status:`OK
+            ~body:"CI minimization not configured for this repository." ()
       | None ->
           if
             string_match
@@ -146,7 +145,7 @@ let handle_comment_created ~bot_info ~key ~app_id ~github_bot_name
             init_git_bare_repository ~bot_info
             >>= fun () ->
             Bot_components.Github_installations.action_as_github_app ~bot_info
-              ~key ~app_id ~owner:comment_info.issue.issue.owner
+              ~key ~app_id ~owner
               (Pr_sync.run_ci_action ~comment_info ?full_ci ~gitlab_mapping
                  ~github_mapping () )
           else if
@@ -160,8 +159,7 @@ let handle_comment_created ~bot_info ~key ~app_id ~github_bot_name
           then (
             (fun () ->
               Bot_components.Github_installations.action_as_github_app ~bot_info
-                ~key ~app_id ~owner:comment_info.issue.issue.owner
-                (fun ~bot_info ->
+                ~key ~app_id ~owner (fun ~bot_info ->
                   GitHub_automation.merge_pull_request_action ~bot_info
                     comment_info ) )
             |> Lwt.async ;
@@ -179,8 +177,7 @@ let handle_comment_created ~bot_info ~key ~app_id ~github_bot_name
           then (
             (fun () ->
               Bot_components.Github_installations.action_as_github_app ~bot_info
-                ~key ~app_id ~owner:comment_info.issue.issue.owner
-                (fun ~bot_info ->
+                ~key ~app_id ~owner (fun ~bot_info ->
                   Bench.run_bench ~bot_info
                     ~key_value_pairs:[("coq_native", "yes")]
                     comment_info ) )
@@ -199,8 +196,8 @@ let handle_comment_created ~bot_info ~key ~app_id ~github_bot_name
           then (
             (fun () ->
               Bot_components.Github_installations.action_as_github_app ~bot_info
-                ~key ~app_id ~owner:comment_info.issue.issue.owner
-                (fun ~bot_info -> Bench.run_bench ~bot_info comment_info ) )
+                ~key ~app_id ~owner (fun ~bot_info ->
+                  Bench.run_bench ~bot_info comment_info ) )
             |> Lwt.async ;
             Server.respond_string ~status:`OK
               ~body:(f "Received a request to start the bench.")
@@ -208,7 +205,27 @@ let handle_comment_created ~bot_info ~key ~app_id ~github_bot_name
           else
             Server.respond_string ~status:`OK
               ~body:(f "Unhandled comment: %s" body)
-              () ) )
+              () )
+  in
+  match minimize_text_of_body body with
+  | None ->
+      handle_non_minimize_commands ()
+  | Some (options, script) -> (
+    match minimizer_url with
+    | None ->
+        handle_non_minimize_commands ()
+    | Some minimizer_url ->
+        (fun () ->
+          init_git_bare_repository ~bot_info
+          >>= fun () ->
+          Bot_components.Github_installations.action_as_github_app ~bot_info
+            ~key ~app_id ~owner (fun ~bot_info ->
+              Minimization.run_coq_minimizer ~bot_info ~script
+                ~comment_thread_id:comment_info.issue.id
+                ~comment_author:comment_info.author ~owner ~repo ~options
+                ~minimizer_url ) )
+        |> Lwt.async ;
+        Server.respond_string ~status:`OK ~body:"Handling minimization." () )
 
 let handle_github_webhook ~bot_info ~key ~app_id ~github_bot_name
     ~gitlab_mapping ~github_mapping ~repo_config_table ~github_webhook_secret
@@ -336,29 +353,36 @@ let handle_github_webhook ~bot_info ~key ~app_id ~github_bot_name
       let body =
         body |> trim_comments |> strip_quoted_bot_name ~github_bot_name
       in
+      let owner = issue_info.issue.owner in
+      let repo = issue_info.issue.repo in
+      let unhandled_issue =
+        Server.respond_string ~status:`OK
+          ~body:(f "Unhandled new issue: %s" body)
+          ()
+      in
       match minimize_text_of_body body with
-      | Some (options, script) ->
-          (fun () ->
-            init_git_bare_repository ~bot_info
-            >>= fun () ->
-            Bot_components.Github_installations.action_as_github_app ~bot_info
-              ~key ~app_id ~owner:issue_info.issue.owner (fun ~bot_info ->
-                Minimization.run_coq_minimizer ~bot_info ~script
-                  ~comment_thread_id:issue_info.id
-                  ~comment_author:issue_info.user ~owner:issue_info.issue.owner
-                  ~repo:issue_info.issue.repo ~options
-                  ~minimizer_url:
-                    "https://github.com/rocq-community/run-coq-bug-minimizer/actions" ) )
-          |> Lwt.async ;
-          Server.respond_string ~status:`OK ~body:"Handling minimization." ()
       | None ->
-          Server.respond_string ~status:`OK
-            ~body:(f "Unhandled new issue: %s" body)
-            () )
+          unhandled_issue
+      | Some (options, script) -> (
+        match Repo_config.find_by_github ~owner ~repo repo_config_table with
+        | Some {minimizer_url= Some minimizer_url} ->
+            (fun () ->
+              init_git_bare_repository ~bot_info
+              >>= fun () ->
+              Bot_components.Github_installations.action_as_github_app ~bot_info
+                ~key ~app_id ~owner (fun ~bot_info ->
+                  Minimization.run_coq_minimizer ~bot_info ~script
+                    ~comment_thread_id:issue_info.id
+                    ~comment_author:issue_info.user ~owner ~repo ~options
+                    ~minimizer_url ) )
+            |> Lwt.async ;
+            Server.respond_string ~status:`OK ~body:"Handling minimization." ()
+        | _ ->
+            unhandled_issue ) )
   | Ok (install_id, CommentCreated comment_info) ->
       handle_comment_created ~bot_info ~key ~app_id ~github_bot_name
-        ~gitlab_mapping ~github_mapping ~install_id ~comment_info
-        ~minimize_text_of_body ~ci_minimize_text_of_body
+        ~gitlab_mapping ~github_mapping ~repo_config_table ~install_id
+        ~comment_info ~minimize_text_of_body ~ci_minimize_text_of_body
         ~resume_ci_minimize_text_of_body
   | Ok (None, CheckRunReRequested _) ->
       Server.respond_string ~status:(Code.status_of_code 401)

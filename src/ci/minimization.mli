@@ -127,6 +127,8 @@ val ci_minimization_suggest :
 val suggest_ci_minimization_for_pr :
   ci_minimization_pr_info -> ci_pr_minimization_suggestion
 
+val minimizer_status_link : minimizer_url:string option -> verb:string -> string
+
 val minimize_failed_tests :
      bot_info:Bot_components.Bot_info.t
   -> owner:string
@@ -137,6 +139,7 @@ val minimize_failed_tests :
   -> comment_on_error:bool
   -> bug_file:Bot_components.Minimize_parser.minimize_parsed option
   -> options:string
+  -> minimizer_url:string option
   -> ?base_sha:string
   -> ?head_sha:string
   -> unit
@@ -149,6 +152,7 @@ val ci_minimize :
   -> comment_on_error:bool
   -> options:string
   -> bug_file:Bot_components.Minimize_parser.minimize_parsed option
+  -> minimizer_url:string option
   -> unit Lwt.t
 
 val run_coq_minimizer :
