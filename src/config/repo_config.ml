@@ -121,6 +121,13 @@ let project_organization cfg =
 
 let backport_enabled cfg = Option.is_some cfg.backporting.github_project_number
 
+let gitlab_mirror_coords cfg =
+  match (cfg.gitlab_domain, cfg.gitlab_owner, cfg.gitlab_repo) with
+  | Some domain, Some owner, Some repo ->
+      Some (domain, owner, repo)
+  | _ ->
+      None
+
 let find_by_backport_project ~install_id ~project_number tbl =
   Hashtbl.to_alist tbl
   |> List.find_map ~f:(fun (_key, cfg) ->

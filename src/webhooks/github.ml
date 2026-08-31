@@ -9,61 +9,60 @@ open String_utils
 open Utils
 open Lwt.Infix
 
-(* Handles push events for different repositories (e.g., Rocq community, Math Comp, etc.) *)
-let handle_push_event_for_repos ~bot_info ~key ~app_id ~install_id ~owner ~repo
-    ~base_ref ~head_sha =
-  match (owner, repo) with
-  | "rocq-community", ("docker-base" | "docker-coq" | "docker-rocq") ->
-      (fun () ->
-        init_git_bare_repository ~bot_info
-        >>= fun () ->
-        Bot_components.Github_installations.action_as_github_app_from_install_id
-          ~bot_info ~key ~app_id ~install_id
-          (mirror_action ~gitlab_domain:"gitlab.com" ~gh_owner:owner
-             ~gh_repo:repo ~gl_owner:owner ~gl_repo:repo ~base_ref ~head_sha () ) )
-      |> Lwt.async ;
-      Server.respond_string ~status:`OK
-        ~body:
-          (f
-             "Processing push event on %s/%s repository: mirroring branch on \
-              GitLab."
-             owner repo )
-        ()
-  | "math-comp", ("docker-mathcomp" | "math-comp") ->
-      (fun () ->
-        init_git_bare_repository ~bot_info
-        >>= fun () ->
-        Bot_components.Github_installations.action_as_github_app_from_install_id
-          ~bot_info ~key ~app_id ~install_id
-          (mirror_action ~gitlab_domain:"gitlab.inria.fr" ~gh_owner:owner
-             ~gh_repo:repo ~gl_owner:owner ~gl_repo:repo ~base_ref ~head_sha () ) )
-      |> Lwt.async ;
-      Server.respond_string ~status:`OK
-        ~body:
-          (f
-             "Processing push event on %s/%s repository: mirroring branch on \
-              GitLab."
-             owner repo )
-        ()
-  | "rocq-prover", ("opam" | "docker-rocq") ->
-      (fun () ->
-        init_git_bare_repository ~bot_info
-        >>= fun () ->
-        Bot_components.Github_installations.action_as_github_app_from_install_id
-          ~bot_info ~key ~app_id ~install_id
-          (mirror_action ~gitlab_domain:"gitlab.inria.fr"
-             ~gh_owner:"rocq-prover" ~gh_repo:repo ~gl_owner:"coq" ~gl_repo:repo
-             ~base_ref ~head_sha () ) )
-      |> Lwt.async ;
-      Server.respond_string ~status:`OK
-        ~body:
-          (f
-             "Processing push event on %s/%s repository: mirroring branch on \
-              GitLab."
-             owner repo )
-        ()
-  | _ ->
+(* Handles push events: backport and/or mirror when configured in repo_config. *)
+let handle_push_event ~bot_info ~key ~app_id ~install_id ~repo_config_table
+    ~owner ~repo ~base_ref ~head_sha ~commits_msg =
+  match Repo_config.find_by_github ~owner ~repo repo_config_table with
+  | None ->
       Server.respond_string ~status:`OK ~body:"Ignoring push event." ()
+  | Some cfg ->
+      let do_backport = Repo_config.backport_enabled cfg in
+      let mirror_coords = Repo_config.gitlab_mirror_coords cfg in
+      if (not do_backport) && Option.is_none mirror_coords then
+        Server.respond_string ~status:`OK ~body:"Ignoring push event." ()
+      else (
+        (fun () ->
+          init_git_bare_repository ~bot_info
+          >>= fun () ->
+          let backport =
+            if do_backport then
+              Bot_components.Github_installations
+              .action_as_github_app_from_install_id ~bot_info ~key ~app_id
+                ~install_id
+                (Backport.push_action ~repo_config:cfg ~base_ref ~commits_msg)
+            else Lwt.return_unit
+          in
+          let mirror =
+            match mirror_coords with
+            | None ->
+                Lwt.return_unit
+            | Some (gitlab_domain, gl_owner, gl_repo) ->
+                Bot_components.Github_installations
+                .action_as_github_app_from_install_id ~bot_info ~key ~app_id
+                  ~install_id
+                  (mirror_action ~gitlab_domain ~gh_owner:owner ~gh_repo:repo
+                     ~gl_owner ~gl_repo ~base_ref ~head_sha () )
+          in
+          backport <&> mirror )
+        |> Lwt.async ;
+        let body =
+          if do_backport && Option.is_some mirror_coords then
+            f
+              "Processing push event on %s/%s: analyzing merge / backporting \
+               info and mirroring branch on GitLab."
+              owner repo
+          else if do_backport then
+            f
+              "Processing push event on %s/%s: analyzing merge / backporting \
+               info."
+              owner repo
+          else
+            f
+              "Processing push event on %s/%s repository: mirroring branch on \
+               GitLab."
+              owner repo
+        in
+        Server.respond_string ~status:`OK ~body () )
 
 (* Handles all comment-related events (minimization, CI commands, bench commands, etc.)*)
 let handle_comment_created ~bot_info ~key ~app_id ~github_bot_name
@@ -221,42 +220,10 @@ let handle_github_webhook ~bot_info ~key ~app_id ~github_bot_name
       body
   with
   | Ok
-      ( Some install_id
-      , PushEvent
-          {owner= "rocq-prover"; repo= "rocq"; base_ref; head_sha; commits_msg}
-      ) ->
-      (fun () ->
-        init_git_bare_repository ~bot_info
-        >>= fun () ->
-        let backport =
-          match
-            Repo_config.find_by_github ~owner:"rocq-prover" ~repo:"rocq"
-              repo_config_table
-          with
-          | Some cfg when Repo_config.backport_enabled cfg ->
-              Bot_components.Github_installations
-              .action_as_github_app_from_install_id ~bot_info ~key ~app_id
-                ~install_id
-                (Backport.push_action ~repo_config:cfg ~base_ref ~commits_msg)
-          | _ ->
-              Lwt.return_unit
-        in
-        backport
-        <&> Bot_components.Github_installations
-            .action_as_github_app_from_install_id ~bot_info ~key ~app_id
-              ~install_id
-              (mirror_action ~gitlab_domain:"gitlab.inria.fr"
-                 ~gh_owner:"rocq-prover" ~gh_repo:"rocq" ~gl_owner:"coq"
-                 ~gl_repo:"coq" ~base_ref ~head_sha () ) )
-      |> Lwt.async ;
-      Server.respond_string ~status:`OK
-        ~body:
-          "Processing push event on the Rocq Prover repository: analyzing \
-           merge / backporting info."
-        ()
-  | Ok (Some install_id, PushEvent {owner; repo; base_ref; head_sha; _}) ->
-      handle_push_event_for_repos ~bot_info ~key ~app_id ~install_id ~owner
-        ~repo ~base_ref ~head_sha
+      (Some install_id, PushEvent {owner; repo; base_ref; head_sha; commits_msg})
+    ->
+      handle_push_event ~bot_info ~key ~app_id ~install_id ~repo_config_table
+        ~owner ~repo ~base_ref ~head_sha ~commits_msg
   | Ok (_, PullRequestUpdated (PullRequestClosed, pr_info)) ->
       (fun () ->
         init_git_bare_repository ~bot_info
