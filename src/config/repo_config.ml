@@ -4,6 +4,7 @@ open Utils
 type repo_jobs_config =
   { bench_job: string option
   ; use_rocq_job_status: bool
+  ; silence_docker_manifest_errors: bool
   ; doc_artifact_jobs: string list }
 
 type backport_config = {github_project_number: int option}
@@ -25,7 +26,10 @@ type t =
   ; jobs: repo_jobs_config }
 
 let default_jobs =
-  {bench_job= None; use_rocq_job_status= false; doc_artifact_jobs= []}
+  { bench_job= None
+  ; use_rocq_job_status= false
+  ; silence_docker_manifest_errors= false
+  ; doc_artifact_jobs= [] }
 
 let default_backporting = {github_project_number= None}
 
@@ -40,6 +44,9 @@ let parse_jobs tbl key =
               if String.is_empty s then None else Some s )
       ; use_rocq_job_status=
           key_bool jobs_tbl "use_rocq_job_status" |> Option.value ~default:false
+      ; silence_docker_manifest_errors=
+          key_bool jobs_tbl "silence_docker_manifest_errors"
+          |> Option.value ~default:false
       ; doc_artifact_jobs=
           key_array jobs_tbl "doc_artifact_jobs" |> Option.value ~default:[] }
 
@@ -125,3 +132,38 @@ let find_by_backport_project ~install_id ~project_number tbl =
           Some cfg
       | _ ->
           None )
+
+let is_bench_job cfg build_name =
+  match cfg.jobs.bench_job with
+  | Some name ->
+      String.equal name build_name
+  | None ->
+      false
+
+let is_doc_artifact_job cfg build_name =
+  List.mem cfg.jobs.doc_artifact_jobs build_name ~equal:String.equal
+
+let github_full_name cfg = cfg.github_owner ^ "/" ^ cfg.github_repo
+
+let gitlab_job_url cfg ~job_id =
+  match (cfg.gitlab_domain, cfg.gitlab_owner, cfg.gitlab_repo) with
+  | Some domain, Some owner, Some repo ->
+      Some (f "https://%s/%s/%s/-/jobs/%d" domain owner repo job_id)
+  | _ ->
+      None
+
+let gitlab_pages_host domain owner =
+  if String.equal domain "gitlab.com" then owner ^ ".gitlab.io"
+  else if String.is_prefix domain ~prefix:"gitlab." then
+    owner ^ ".gitlabpages." ^ String.drop_prefix domain 7
+  else owner ^ ".gitlabpages." ^ domain
+
+let gitlab_pages_artifact_url cfg ~job_id ~artifact =
+  match (cfg.gitlab_domain, cfg.gitlab_owner, cfg.gitlab_repo) with
+  | Some domain, Some owner, Some repo ->
+      Some
+        (f "https://%s/-/%s/-/jobs/%d/artifacts/%s"
+           (gitlab_pages_host domain owner)
+           repo job_id artifact )
+  | _ ->
+      None

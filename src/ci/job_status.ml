@@ -121,7 +121,7 @@ let send_status_check ~bot_info job_info ~pr_num (gh_owner, gh_repo)
 (* GitLab Trace Processing Utilities                                          *)
 (******************************************************************************)
 
-let trace_action ~repo_full_name trace =
+let trace_action ~silence_docker_manifest_errors trace =
   trace |> String.length
   |> Lwt_io.printlf "Trace size: %d."
   >>= fun () ->
@@ -158,14 +158,14 @@ let trace_action ~repo_full_name trace =
        || test "fatal: [Cc]ouldn't find remote ref refs/heads/pr-"
      then Ignore "Normal failure: pull request was closed."
      else if
-       String.equal repo_full_name "coq/coq"
+       silence_docker_manifest_errors
        && test "Error response from daemon: manifest for .* not found"
      then Ignore "Docker image not found. Do not report anything specific."
      else Warn trace )
 
 let job_failure ~bot_info job_info ~pr_num (gh_owner, gh_repo) ~gitlab_domain
     ~gitlab_repo_full_name ~context ~failure_reason ~external_id
-    ?summary_builder ?allow_failure_handler () =
+    ~silence_docker_manifest_errors ?summary_builder ?allow_failure_handler () =
   let build_id = job_info.build_id in
   let project_id =
     (job_info.common_info : Bot_components.GitLab_types.ci_common_info)
@@ -185,7 +185,7 @@ let job_failure ~bot_info job_info ~pr_num (gh_owner, gh_repo) ~gitlab_domain
         ~build_id
       >>= function
       | Ok trace ->
-          trace_action ~repo_full_name:gitlab_repo_full_name trace
+          trace_action ~silence_docker_manifest_errors trace
       | Error err ->
           Lwt.return (Ignore (f "Error while retrieving the trace: %s." err)) )
   >>= function

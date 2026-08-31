@@ -67,6 +67,8 @@ app_id="31373"
  bench_job = "bench"
  # Use Rocq-specific failure summaries / allow-failure handling
  use_rocq_job_status = true
+ # Ignore missing Docker image manifest errors in CI traces
+ silence_docker_manifest_errors = true
  # Successful jobs that get a GitHub status check linking to doc artifacts
  doc_artifact_jobs = [
   "doc:refman", "doc:ci-refman", "doc:init",
