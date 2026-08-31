@@ -170,6 +170,27 @@ let handle_comment_created ~bot_info ~key ~app_id ~github_bot_name
               () )
           else if
             string_match
+              ~regexp:
+                ( f "@%s:? [Ss]quash and merge\\( now\\)?"
+                @@ Str.quote github_bot_name )
+              body
+            && comment_info.issue.pull_request
+            && String.equal comment_info.issue.issue.owner "rocq-prover"
+            && String.equal comment_info.issue.issue.repo "rocq"
+            && Option.is_some install_id
+          then (
+            (fun () ->
+              Bot_components.Github_installations.action_as_github_app ~bot_info
+                ~key ~app_id ~owner:comment_info.issue.issue.owner
+                (fun ~bot_info ->
+                  GitHub_automation.merge_pull_request_action ~bot_info
+                    ~merge_method:SQUASH comment_info ) )
+            |> Lwt.async ;
+            Server.respond_string ~status:`OK
+              ~body:(f "Received a request to squash and merge the PR.")
+              () )
+          else if
+            string_match
               ~regexp:(f "@%s:? [Bb]ench native" @@ Str.quote github_bot_name)
               body
             && comment_info.issue.pull_request

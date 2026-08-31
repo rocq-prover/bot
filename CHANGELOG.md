@@ -8,6 +8,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - Support for automatically closing stale pull requests.
+- Squash-merge a pull request under the same conditions as `merge now`, by
+  writing `@coqbot: squash and merge` or `@coqbot: squash and merge now` in a
+  comment.
 
 ### Changed
 - The bot no longer creates the `needs: rebase` label if it doesn't exist.

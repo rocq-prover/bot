@@ -1,5 +1,9 @@
 val merge_pull_request_action :
-  bot_info:Bot_info.t -> ?t:float -> GitHub_types.comment_info -> unit Lwt.t
+     bot_info:Bot_info.t
+  -> ?t:float
+  -> ?merge_method:GitHub_types.merge_method
+  -> GitHub_types.comment_info
+  -> unit Lwt.t
 
 val adjust_milestone :
      bot_info:Bot_info.t
