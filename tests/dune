@@ -48,3 +48,8 @@
  (name test_string_utils)
  (modules test_string_utils)
  (libraries alcotest bot-components base))
+
+(test
+ (name test_bench)
+ (modules test_bench)
+ (libraries alcotest bot-components coq-bot.utils base))

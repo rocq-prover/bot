@@ -65,9 +65,29 @@ let handle_push_event_for_repos ~bot_info ~key ~app_id ~install_id ~owner ~repo
   | _ ->
       Server.respond_string ~status:`OK ~body:"Ignoring push event." ()
 
+let bench_params_from_config ~owner ~repo repo_config_table =
+  match Repo_config.find_by_github ~owner ~repo repo_config_table with
+  | None ->
+      (None, None, None, "bench")
+  | Some cfg ->
+      ( cfg.gitlab_domain
+      , cfg.gitlab_owner
+      , cfg.gitlab_repo
+      , Option.value cfg.jobs.bench_job ~default:"bench" )
+
+let run_bench_with_config ~bot_info ~repo_config_table ?key_value_pairs
+    comment_info =
+  let owner = comment_info.issue.issue.owner in
+  let repo = comment_info.issue.issue.repo in
+  let gitlab_domain, gitlab_owner, gitlab_repo, bench_job =
+    bench_params_from_config ~owner ~repo repo_config_table
+  in
+  Bench.run_bench ~bot_info ~gitlab_domain ~gitlab_owner ~gitlab_repo ~bench_job
+    ?key_value_pairs comment_info
+
 (* Handles all comment-related events (minimization, CI commands, bench commands, etc.)*)
 let handle_comment_created ~bot_info ~key ~app_id ~github_bot_name
-    ~gitlab_mapping ~github_mapping ~install_id
+    ~gitlab_mapping ~github_mapping ~repo_config_table ~install_id
     ~(comment_info : Bot_components.GitHub_types.comment_info)
     ~minimize_text_of_body ~ci_minimize_text_of_body
     ~resume_ci_minimize_text_of_body =
@@ -181,7 +201,7 @@ let handle_comment_created ~bot_info ~key ~app_id ~github_bot_name
               Bot_components.Github_installations.action_as_github_app ~bot_info
                 ~key ~app_id ~owner:comment_info.issue.issue.owner
                 (fun ~bot_info ->
-                  Bench.run_bench ~bot_info
+                  run_bench_with_config ~bot_info ~repo_config_table
                     ~key_value_pairs:[("coq_native", "yes")]
                     comment_info ) )
             |> Lwt.async ;
@@ -200,7 +220,9 @@ let handle_comment_created ~bot_info ~key ~app_id ~github_bot_name
             (fun () ->
               Bot_components.Github_installations.action_as_github_app ~bot_info
                 ~key ~app_id ~owner:comment_info.issue.issue.owner
-                (fun ~bot_info -> Bench.run_bench ~bot_info comment_info ) )
+                (fun ~bot_info ->
+                  run_bench_with_config ~bot_info ~repo_config_table
+                    comment_info ) )
             |> Lwt.async ;
             Server.respond_string ~status:`OK
               ~body:(f "Received a request to start the bench.")
@@ -357,8 +379,8 @@ let handle_github_webhook ~bot_info ~key ~app_id ~github_bot_name
             () )
   | Ok (install_id, CommentCreated comment_info) ->
       handle_comment_created ~bot_info ~key ~app_id ~github_bot_name
-        ~gitlab_mapping ~github_mapping ~install_id ~comment_info
-        ~minimize_text_of_body ~ci_minimize_text_of_body
+        ~gitlab_mapping ~github_mapping ~repo_config_table ~install_id
+        ~comment_info ~minimize_text_of_body ~ci_minimize_text_of_body
         ~resume_ci_minimize_text_of_body
   | Ok (None, CheckRunReRequested _) ->
       Server.respond_string ~status:(Code.status_of_code 401)

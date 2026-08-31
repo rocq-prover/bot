@@ -53,7 +53,7 @@ let callback _conn req body =
         ~body
   | "/push" | "/pull_request" (* legacy endpoints *) | "/github" ->
       Github.handle_github_webhook ~bot_info ~key ~app_id ~github_bot_name
-        ~gitlab_mapping ~repo_config_table ~github_mapping
+        ~gitlab_mapping ~github_mapping ~repo_config_table
         ~github_webhook_secret ~headers:(Request.headers req) ~body
         ~minimize_text_of_body ~ci_minimize_text_of_body
         ~resume_ci_minimize_text_of_body

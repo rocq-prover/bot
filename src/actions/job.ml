@@ -30,7 +30,8 @@ let job_action ~bot_info
       match repo_config with
       | Some cfg when Repo_config.is_bench_job cfg build_name ->
           Bench.update_bench_status ~bot_info ~job_info (gh_owner, gh_repo)
-            ~external_id ~number:pr_num
+            ~external_id ~number:pr_num ~gitlab_domain:cfg.gitlab_domain
+            ~gitlab_owner:cfg.gitlab_owner ~gitlab_repo:cfg.gitlab_repo
       | _ -> (
         match job_info.build_status with
         | "failed" ->
