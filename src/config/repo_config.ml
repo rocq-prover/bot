@@ -156,7 +156,7 @@ let gitlab_pages_host domain owner =
   if String.equal domain "gitlab.com" then owner ^ ".gitlab.io"
   else if String.is_prefix domain ~prefix:"gitlab." then
     owner ^ ".gitlabpages." ^ String.drop_prefix domain 7
-  else owner ^ ".gitlablpages." ^ domain
+  else owner ^ ".gitlabpages." ^ domain
 
 let gitlab_pages_artifact_url cfg ~job_id ~artifact =
   match (cfg.gitlab_domain, cfg.gitlab_owner, cfg.gitlab_repo) with
