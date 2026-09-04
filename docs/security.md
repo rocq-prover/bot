@@ -1,104 +1,246 @@
-# Security Reference -- coqbot / rocqbot
+# Security Reference — Rocq Bot (`coqbot` / `rocqbot`)
 
 Single source of truth for the security posture of this repository: threat model,
-vulnerability findings, control objectives, remediation plan, and disclosure policy.
+vulnerability findings, architecture, control objectives, remediation plan, and disclosure policy.
+
+> [!IMPORTANT]
+> **Audit basis**: This document reflects the **verified state of the current source tree** as reviewed. Claims are supported by cited source evidence. Aspirational controls that are not yet implemented are not presented as implemented.
 
 | Field | Value |
 |-------|-------|
-| Scope | This repository only: `src/`, `bot-components/`, the shell scripts invoked by the bot, and the deployment manifests |
-| Method | Manual source-code review of the full tree, plus local reproduction of injection mechanics in `/bin/sh` |
-| Commit basis | `master` working tree as reviewed |
-| Last updated | 2026-09-03 |
+| Scope | `src/`, `bot-components/`, shell scripts, deployment manifests, GitHub Actions workflows |
+| Method | Manual source-code review of the full tree; local reproduction of injection mechanics in `/bin/sh` |
+| Audit date | 2026-09-04 |
+| Last updated | 2026-09-04 |
 | Public entry point | `SECURITY.md` at the repository root links here |
+
+---
 
 ## How to read this document
 
-1. Every finding cites `file:line` and quotes the deciding expression. If a line number
-   drifts, the quoted logic is the evidence, not the number.
-2. Finding identifiers (CRITICAL-1, HIGH-1, MEDIUM-1, ...) are stable labels for
-   cross-reference within this document and for remediation tracking.
-3. Colored badges mark severity and attacker position. See the
-   [Severity color key](#severity-color-key) below.
-4. "Reachable by" always names the weakest attacker position (P1 to P6) that suffices,
-   using the position table in [Attacker positions](#attacker-positions).
+1. Every finding cites `file:line` and quotes the deciding expression.
+2. Finding identifiers (CRITICAL-1, HIGH-1, MEDIUM-1, …) are stable labels for cross-reference and remediation tracking.
+3. Colored badges mark severity and attacker position. See the [Severity color key](#severity-color-key) below.
+4. "Reachable by" names the weakest attacker position (P1 to P6) that suffices.
+5. Status labels: `CONFIRMED`, `LIKELY`, `POTENTIAL`, `NOT_REPRODUCED`, `FIXED-VERIFIED`, `FIXED-UNVERIFIED`, `FALSE-POSITIVE`, `UNKNOWN`.
 
 ### Severity color key
 
 | Marker | Severity | Meaning |
 |--------|----------|---------|
 | ![Critical](https://img.shields.io/badge/Critical-c0392b) | Critical | Unauthenticated RCE or abuse of privileged credentials on an attacker-chosen target |
-| ![High](https://img.shields.io/badge/High-e67e22) | High | Privileged effect with one precondition (another finding, leaked secret, or host access) |
+| ![High](https://img.shields.io/badge/High-e67e22) | High | Privileged effect with one precondition |
 | ![Medium](https://img.shields.io/badge/Medium-f39c12) | Medium | Bounded effect: needs an account/config, or cost/integrity/leak impact |
 | ![Low](https://img.shields.io/badge/Low-3498db) | Low | Hardening gap or latent defect with no currently reachable exploit path |
 | ![Info](https://img.shields.io/badge/Info-7f8c8d) | Info | Operational or hygiene observation, not a vulnerability |
 | ![Accepted](https://img.shields.io/badge/Accepted-27ae60) | Accepted | Documented design risk; residual control is intentional |
 
-Attacker-position markers used in the index: ![P1](https://img.shields.io/badge/P1-8e44ad) ![P2](https://img.shields.io/badge/P2-8e44ad) ![P3](https://img.shields.io/badge/P3-8e44ad) ![P4](https://img.shields.io/badge/P4-8e44ad) ![P5](https://img.shields.io/badge/P5-8e44ad) ![P6](https://img.shields.io/badge/P6-8e44ad).
+---
 
+## 1. Executive Summary
+
+The bot is an internet-facing HTTP server that holds a GitHub App RSA private key, a GitHub Personal Access Token, and GitLab API tokens. Three of its seven routes accept requests with no authentication at all, and two more fail open when their authentication header is absent.
+
+The single most severe issue is **remote command execution on the bot host**, reachable by any internet client with one unauthenticated HTTP POST, via an unbalanced shell quote in `src/ci/minimization.ml:1394`. This is reproduced with evidence in [CRITICAL-2](#critical-2).
+
+| Severity | Count | Identifiers |
+|----------|------:|-------------|
+| ![Critical](https://img.shields.io/badge/Critical-c0392b) Critical | 4 | CRITICAL-1, CRITICAL-2, CRITICAL-3, CRITICAL-4 |
+| ![High](https://img.shields.io/badge/High-e67e22) High | 6 | HIGH-1 through HIGH-6 |
+| ![Medium](https://img.shields.io/badge/Medium-f39c12) Medium | 10 | MEDIUM-1, MEDIUM-3 through MEDIUM-11 |
+| ![Low](https://img.shields.io/badge/Low-3498db) Low | 9 | LOW-1 through LOW-9 |
+| ![Info](https://img.shields.io/badge/Info-7f8c8d) Info | 8 | INFO-1 through INFO-8 |
+| ![Accepted](https://img.shields.io/badge/Accepted-27ae60) Accepted | 3 | ACCEPTED-1, ACCEPTED-2, ACCEPTED-3 |
+
+Three controls are correctly implemented and must not be regressed: constant-time secret comparison via `Eqaf.equal`, the fail-closed rejection of unsigned check-run re-requests, and the fail-closed behaviour of `get_team_membership` on error.
 
 ---
 
-## Executive summary
+## 2. Security Verdict
 
-The bot is an internet-facing HTTP server that holds a GitHub App RSA private key, a
-GitHub Personal Access Token, and GitLab API tokens. Three of its seven routes accept
-requests with no authentication at all, and two more fail open when their
-authentication header is absent. The consequence is a textbook confused deputy: the
-bot exercises privileged credentials on targets named by the caller.
+> **NOT SAFE FOR PRODUCTION** (Gate 0 — Unsafe)
 
-The single most severe issue is remote command execution on the bot host, reachable by
-any internet client with one unauthenticated HTTP POST, via an unbalanced shell quote in
-`src/ci/minimization.ml:1394`. This is reproduced with evidence in
-[CRITICAL-2](#critical-2).
+Four independently exploitable Critical conditions exist:
 
-| | Severity | Count | Identifiers |
-|---|----------|------:|-------------|
-| ![Critical](https://img.shields.io/badge/Critical-c0392b) | Critical | 4 | CRITICAL-1, CRITICAL-2, CRITICAL-3, CRITICAL-4 |
-| ![High](https://img.shields.io/badge/High-e67e22) | High | 6 | HIGH-1, HIGH-2, HIGH-3, HIGH-4, HIGH-5, HIGH-6 |
-| ![Medium](https://img.shields.io/badge/Medium-f39c12) | Medium | 10 | MEDIUM-1, MEDIUM-3, MEDIUM-4, MEDIUM-5, MEDIUM-6, MEDIUM-7, MEDIUM-8, MEDIUM-9, MEDIUM-10, MEDIUM-11 |
-| ![Low](https://img.shields.io/badge/Low-3498db) | Low | 9 | LOW-1 to LOW-9 |
-| ![Info](https://img.shields.io/badge/Info-7f8c8d) | Info | 8 | INFO-1 to INFO-8 |
-| ![Accepted](https://img.shields.io/badge/Accepted-27ae60) | Accepted | 3 | ACCEPTED-1, ACCEPTED-2, ACCEPTED-3 |
+- **CRITICAL-1**: Unauthenticated command-and-control via minimizer callbacks
+- **CRITICAL-2**: Remote code execution on the bot host via shell injection
+- **CRITICAL-3**: Unauthenticated attacker-controlled Docker image in a trusted workflow
+- **CRITICAL-4**: GitHub webhooks without `installation.id` bypass all signature verification
 
-Three controls are correctly implemented and should not be regressed: constant-time
-secret comparison via `Eqaf.equal`, the fail-closed rejection of unsigned check-run
-re-requests, and the fail-closed behaviour of `get_team_membership` on error.
+None of these require any GitHub or GitLab account. An anonymous internet client can trigger all four.
 
 ---
 
-## System overview
+## 3. Architecture
+
+### System Classification
+
+The bot is a **Privileged Event-Driven DevOps Automation** service. Compromise of the bot is equivalent to compromise of every GitHub organization and GitLab project where it is installed.
+
+### Privileged Capabilities
+
+| Capability | Credential | Scope |
+|------------|------------|-------|
+| Mint GitHub installation tokens | App RSA private key | Every installed org |
+| Push/delete branches in `rocq-community/run-coq-bug-minimizer` | GitHub PAT | That repository |
+| Force-push to GitLab mirrors | GitLab tokens (per instance) | All mirrored repos |
+| Create/update/delete GitHub Checks and comments | Installation tokens | Per-org |
+| Retry GitLab jobs and pipelines | GitLab tokens | All visible projects |
+| Execute shell commands on the bot host | Process privileges | Bot host filesystem |
+| Trigger GitHub Actions workflows | PAT push to trusted repo | `rocq-community/*` |
+
+---
+
+## 4. Source File Index by Security Category
+
+This section maps every security-relevant source file to its category. Use this as the primary navigation aid when reviewing or remediating a specific security area.
+
+### 4.1 HTTP Server and Request Routing
+
+| File | Role | Key Security Properties |
+|------|------|------------------------|
+| `src/bot.ml` | Main entry point, HTTP server, path dispatch | Body buffering before auth (MEDIUM-7), no method enforcement (INFO-6) |
+
+### 4.2 Webhook Authentication
+
+| File | Role | Key Security Properties |
+|------|------|------------------------|
+| `bot-components/github/GitHub_subscriptions.ml` | GitHub webhook parser and HMAC verifier | CRITICAL-4 (auth bypass), LOW-1 (SHA-1 only) |
+| `bot-components/gitlab/GitLab_subscriptions.ml` | GitLab webhook parser and token verifier | HIGH-1 (missing token accepted) |
+| `src/webhooks/github.ml` | GitHub event dispatcher | MEDIUM-1 (no authorization on minimize) |
+| `src/webhooks/gitlab.ml` | GitLab event dispatcher | HIGH-1 consumer (`signed` flag ignored) |
+| `src/webhooks/minimizer.ml` | Minimizer callback dispatcher | CRITICAL-1, CRITICAL-3 (no auth) |
+| `src/webhooks/scheduled.ml` | Stale-PR scheduler handler | LOW-2 (non-constant-time comparison) |
+
+### 4.3 Authorization
+
+| File | Role | Key Security Properties |
+|------|------|------------------------|
+| `src/webhooks/github.ml` | Comment-command authorization | MEDIUM-1 (minimize has no team check) |
+| `src/actions/pr_sync.ml` | PR sync and CI gate | MEDIUM-9 (author vs. pusher identity mismatch) |
+| `src/utils/bench.ml` | Bench authorization | LOW-9 (auth after API work) |
+| `bot-components/github/GitHub_automation.ml` | Merge authorization | Contains correct team-membership gate |
+
+### 4.4 Identity and Resource Binding
+
+| File | Role | Key Security Properties |
+|------|------|------------------------|
+| `bot-components/github/GitHub_installations.ml` | Installation ID → token mapping | MEDIUM-11 (unauthenticated minting), confused deputy via caller-supplied owner |
+| `bot-components/github/GitHub_GitLab_sync.ml` | GitHub↔GitLab repository mapping | HIGH-2 (unmapped path fallback), MEDIUM-6 (coqbot.toml retargeting) |
+| `src/config/repo_config.ml` | Repository configuration | Controls CI dispatch; repository-controlled data |
+
+### 4.5 Command Execution (P0 Priority)
+
+| File | Role | Key Security Properties |
+|------|------|------------------------|
+| `bot-components/utils/Git_utils.ml` | Shell subprocess wrapper (`execute_cmd` via `Lwt_process.shell`) | HIGH-4 (credential in log/URL), HIGH-5 (`repo_url` unquoted), HIGH-6 (SHA unquoted) |
+| `src/ci/minimization.ml` | CI minimization orchestration | CRITICAL-2 (RCE via unbalanced quote at line 1394) |
+| `src/utils/coq.ml` | Coq bug minimizer subprocess | Uses `Filename.quote_command` (correct); PAT in argv (HIGH-4) |
+| `coq_bug_minimizer.sh` | Bash: push minimizer branch | PAT in push URL argv (HIGH-4) |
+| `run_ci_minimization.sh` | Bash: CI minimization branch | PAT in push URL argv (HIGH-4); attacker-controlled `docker_image` in `sed` (CRITICAL-3) |
+| `make_ancestor.sh` | Bash: git merge ancestor | PR title and number in git commit message args (quoted, assessed safe) |
+
+### 4.6 Git and Repository Security
+
+| File | Role | Key Security Properties |
+|------|------|------------------------|
+| `bot-components/utils/Git_utils.ml` | `git_fetch`, `git_push`, `git_test_modified`, `git_make_ancestor` | HIGH-5 (`repo_url` unquoted), HIGH-6 (SHA unquoted) |
+| `bot-components/github/GitHub_GitLab_sync.ml` | Mirror action (fetch from GitHub, push to GitLab) | HIGH-5 via unquoted repo URL |
+| `src/actions/pr_sync.ml` | PR update: fetch, merge, push to GitLab | HIGH-5 call sites |
+| `bot-components/github/GitHub_automation.ml` | PR close: delete remote GitLab branch | Call site for `git_delete` |
+
+### 4.7 Credential Storage and Loading
+
+| File | Role | Key Security Properties |
+|------|------|------------------------|
+| `src/config/config.ml` | Credential loading from TOML/env | HIGH-3 (secret defaults), credential loading patterns |
+| `bot-components/core/Bot_info.ml` | Bot credential struct | PAT accessor used throughout |
+| `bot-components/github/GitHub_app.ml` | JWT generation, installation token minting | LOW-5 (no clock-skew margin) |
+| `bot-components/github/GitHub_installations.ml` | Installation token cache (40 min TTL) | INFO-3 (in-process cache) |
+| `.bot-env` | Local dev credentials (never committed) | INFO-5 (live credentials on disk) |
+
+### 4.8 HTTP Client and SSRF
+
+| File | Role | Key Security Properties |
+|------|------|------------------------|
+| `bot-components/utils/HTTP_utils.ml` | HTTP client, redirect follower, artifact downloader | MEDIUM-4 (no SSRF allowlist, unlimited redirects) |
+| `src/ci/minimization.ml` | Calls `download_to` with caller-supplied URL | MEDIUM-4 source |
+
+### 4.9 API Clients and Serialization
+
+| File | Role | Key Security Properties |
+|------|------|------------------------|
+| `bot-components/github/GitHub_mutations.ml` | GitHub REST/GraphQL mutations | MEDIUM-10 (JSON by concatenation, commit ref in path) |
+| `bot-components/github/GitHub_queries.ml` | GitHub GraphQL queries | Team membership queries used for authorization |
+| `bot-components/gitlab/GitLab_mutations.ml` | GitLab REST mutations (retry, play) | LOW-6 (JSON by concatenation), MEDIUM-3 (`url_part` in path) |
+| `bot-components/gitlab/GitLab_queries.ml` | GitLab REST queries (build trace) | LOW-7 (status code ignored) |
+
+### 4.10 CI/CD Logic
+
+| File | Role | Key Security Properties |
+|------|------|------------------------|
+| `src/ci/job_status.ml` | GitLab job → GitHub Check translation | LOW-4 (trace published to GitHub) |
+| `src/ci/minimization.ml` | CI minimization orchestration | CRITICAL-1, CRITICAL-2, CRITICAL-3, MEDIUM-4 |
+| `src/ci/documentation.ml` | Documentation artifact status | Calls `send_status_check`; currently safe via allowlist |
+| `bot-components/ci/pipeline.ml` | Pipeline event → Check summary | MEDIUM-5 (pipeline variables published) |
+| `src/actions/pr_sync.ml` | PR update flow | MEDIUM-9 |
+
+### 4.11 Supply Chain
+
+| File | Role | Key Security Properties |
+|------|------|------------------------|
+| `Dockerfile` | Development Docker image | Inherits from untagged `coqbot` image (mutable) |
+| `release.Dockerfile` | Production Docker image | Pinned to `alpine:3.20` (tag, not digest) |
+| `.github/workflows/ci.yml` | CI workflow | Uses action tags, not digest pins |
+| `.github/workflows/deploy_heroku.yml` | Heroku deploy workflow | Third-party `akhileshns/heroku-deploy@v3.13.15` (mutable tag) |
+| `.github/workflows/publish_docker.yml` | Docker publish workflow | `actions/checkout@v2` (old version), mutable tags |
+| `coq-bot.opam` | OCaml dependencies | Version ranges, not pinned to digests |
+
+### 4.12 Tests
+
+| File | Role | Key Security Properties |
+|------|------|------------------------|
+| `tests/test_webhook.ml` | Webhook parsing tests | **Contains incorrect assertion about CRITICAL-4** (must be updated) |
+| `tests/test_pat_usage.ml` | PAT dependency tests | Tests PAT requirement for minimizer; does not test injection |
+| `tests/test_git_utils.ml` | Git URL parser tests | No injection tests |
+| `tests/test_minimize_parser.ml` | Minimize parser tests | Parses bot command syntax |
+| `tests/test_string_utils.ml` | String utility tests | No security-specific coverage |
+
+---
+
+## 5. System Context Diagram
 
 ```mermaid
 flowchart LR
-  subgraph Callers
-    NET["Internet<br/>any client"]
-    GH["GitHub App<br/>webhooks"]
-    GL["GitLab<br/>webhooks"]
-    ACT["run-coq-bug-minimizer<br/>GitHub Actions"]
+  subgraph External["External Actors (UNTRUSTED)"]
+    NET["Internet client\nany anonymous actor"]
+    GH["GitHub App\nwebhooks"]
+    GL["GitLab\nwebhooks"]
+    ACT["run-coq-bug-minimizer\nGitHub Actions"]
     CRON["Scheduler"]
   end
 
-  subgraph Bot["bot.exe -- single Cohttp server, single Lwt event loop"]
-    ROUTER["src/bot.ml callback<br/>path dispatch only"]
-    WGH["webhooks/github.ml"]
-    WGL["webhooks/gitlab.ml"]
-    WMIN["webhooks/minimizer.ml"]
-    WSCH["webhooks/scheduled.ml"]
-    SHELL["Git_utils.execute_cmd<br/>Lwt_process.shell = /bin/sh -c"]
+  subgraph Bot["bot.exe — single Cohttp server, single Lwt event loop"]
+    ROUTER["src/bot.ml\npath dispatch only"]
+    WGH["src/webhooks/github.ml\nHMAC-SHA1 (conditional)"]
+    WGL["src/webhooks/gitlab.ml\nToken (optional — HIGH-1)"]
+    WMIN["src/webhooks/minimizer.ml\nNO AUTHENTICATION"]
+    WSCH["src/webhooks/scheduled.ml\nbody secret"]
+    SHELL["Git_utils.execute_cmd\nLwt_process.shell = /bin/sh -c\nShell injection sink"]
   end
 
   subgraph Creds["Credentials held in process"]
     KEY["GitHub App RSA key"]
     PAT["GitHub PAT"]
-    GLT["GitLab tokens"]
-    TOKC["Installation token cache<br/>40 min TTL"]
+    GLT["GitLab tokens (per instance)"]
+    TOKC["Installation token cache\n40 min TTL"]
   end
 
-  subgraph Targets
+  subgraph Targets["Privileged targets"]
     GHAPI["GitHub REST + GraphQL"]
     GLAPI["GitLab REST + GraphQL"]
-    GLREPO["GitLab mirrors<br/>force push"]
-    MINREPO["rocq-community/<br/>run-coq-bug-minimizer"]
+    GLREPO["GitLab mirrors\nforce push"]
+    MINREPO["rocq-community/\nrun-coq-bug-minimizer"]
   end
 
   NET --> ROUTER
@@ -124,21 +266,11 @@ flowchart LR
   GLT --> GLREPO
   SHELL --> GLREPO
   SHELL --> MINREPO
-
-  classDef ui fill:#cfe2f3,stroke:#1565c0,color:#0d47a1
-  classDef wiring fill:#b2dfdb,stroke:#00796b,color:#004d40
-  classDef domain fill:#c8e6c9,stroke:#2e7d32,color:#1b5e20
-  classDef shared fill:#e1bee7,stroke:#7b1fa2,color:#4a148c
-  classDef transport fill:#ffe0b2,stroke:#ef6c00,color:#e65100
-
-  class NET,GH,GL,ACT,CRON ui
-  class ROUTER,WGH,WGL,WMIN,WSCH wiring
-  class KEY,PAT,GLT,TOKC shared
-  class GHAPI,GLAPI,GLREPO,MINREPO domain
-  class SHELL transport
 ```
 
-### Assets
+---
+
+## 6. Assets
 
 | Asset | Where it lives | Blast radius if abused |
 |-------|----------------|------------------------|
@@ -150,7 +282,9 @@ flowchart LR
 | Daily-schedule secret | `Config.daily_schedule_secret`; same default (`src/config/config.ml:83`) | Drive `/check-stale-pr`: comment on, label, and close pull requests |
 | Installation token cache | `GitHub_installations.installation_tokens` | Org-level GitHub write tokens, valid up to 40 minutes; survives in process memory |
 
-### HTTP surface and current authentication state
+---
+
+## 7. HTTP surface and current authentication state
 
 | Route | Legacy aliases | Authentication as implemented | Fails open? |
 |-------|----------------|-------------------------------|:-----------:|
@@ -165,23 +299,23 @@ flowchart LR
 flowchart TD
   REQ["POST body"] --> P{"path"}
 
-  P -->|"/github /push /pull_request"| GHJ{"installation.id<br/>parses as int?"}
-  GHJ -->|"yes"| SIG{"X-Hub-Signature<br/>present and valid?"}
-  SIG -->|"yes"| OKS["ACCEPT signed"]
-  SIG -->|"no"| REJ["REJECT 401"]
-  GHJ -->|"no -- exception swallowed"| OPEN1["ACCEPT UNSIGNED<br/>CRITICAL-4"]
+  P --> |"/github /push /pull_request"| GHJ{"installation.id\nparses as int?"}
+  GHJ --> |"yes"| SIG{"X-Hub-Signature\npresent and valid?"}
+  SIG --> |"yes"| OKS["ACCEPT signed"]
+  SIG --> |"no"| REJ["REJECT 401"]
+  GHJ --> |"no -- exception swallowed"| OPEN1["ACCEPT UNSIGNED\nCRITICAL-4"]
 
-  P -->|"/gitlab /job /pipeline"| GLH{"X-Gitlab-Token<br/>header present?"}
-  GLH -->|"yes"| GLC{"matches secret?"}
-  GLC -->|"yes"| OKG["ACCEPT signed=true"]
-  GLC -->|"no"| REJ
-  GLH -->|"no"| OPEN2["ACCEPT signed=false<br/>handlers never read the flag<br/>HIGH-1"]
+  P --> |"/gitlab /job /pipeline"| GLH{"X-Gitlab-Token\nheader present?"}
+  GLH --> |"yes"| GLC{"matches secret?"}
+  GLC --> |"yes"| OKG["ACCEPT signed=true"]
+  GLC --> |"no"| REJ
+  GLH --> |"no"| OPEN2["ACCEPT signed=false\nhandlers never read the flag\nHIGH-1"]
 
-  P -->|"minimizer routes"| OPEN3["ACCEPT unconditionally<br/>CRITICAL-1 CRITICAL-3"]
+  P --> |"minimizer routes"| OPEN3["ACCEPT unconditionally\nCRITICAL-1 CRITICAL-3"]
 
-  P -->|"/check-stale-pr"| SEC{"body secret ==<br/>schedule secret?"}
-  SEC -->|"yes"| OKC["ACCEPT"]
-  SEC -->|"no"| REJ
+  P --> |"/check-stale-pr"| SEC{"body secret ==\nschedule secret?"}
+  SEC --> |"yes"| OKC["ACCEPT"]
+  SEC --> |"no"| REJ
 
   classDef start fill:#eceff1,stroke:#546e7a,color:#263238
   classDef domain fill:#c8e6c9,stroke:#2e7d32,color:#1b5e20
@@ -196,7 +330,9 @@ flowchart TD
   class OPEN2 wiring
 ```
 
-### Attacker positions
+---
+
+## 8. Attacker positions
 
 | | ID | Position | Capability without any privilege |
 |---|----|----------|----------------------------------|
@@ -209,53 +345,54 @@ flowchart TD
 
 ---
 
-## Findings index
+## 9. Findings index
 
-| ID | Title | Sev | CWE | Category | Reachable by | Primary location |
-|----|-------|-----|-----|----------|--------------|------------------|
-| CRITICAL-1 | Minimizer callbacks have no authentication | ![Critical](https://img.shields.io/badge/Critical-c0392b) | CWE-306 | Authentication, Confused deputy | P1 | `src/bot.ml:60`, `src/ci/minimization.ml:1376` |
-| CRITICAL-2 | Shell command injection in the branch-delete command | ![Critical](https://img.shields.io/badge/Critical-c0392b) | CWE-78 | Injection | P1 | `src/ci/minimization.ml:1394` |
-| CRITICAL-3 | Unauthenticated resume writes an attacker-chosen workflow image | ![Critical](https://img.shields.io/badge/Critical-c0392b) | CWE-306 | Authentication, Supply chain | P1 | `src/ci/minimization.ml:1409`, `run_ci_minimization.sh:56` |
-| CRITICAL-4 | GitHub webhooks without `installation.id` skip signature verification | ![Critical](https://img.shields.io/badge/Critical-c0392b) | CWE-347 | Authentication | P1 | `bot-components/github/GitHub_subscriptions.ml:249-263` |
-| HIGH-1 | GitLab webhooks without a token are processed as valid | ![High](https://img.shields.io/badge/High-e67e22) | CWE-306 | Authentication | P1 | `bot-components/gitlab/GitLab_subscriptions.ml:114-119` |
-| HIGH-2 | Unmapped GitLab path is used directly as a GitHub `owner/repo` | ![High](https://img.shields.io/badge/High-e67e22) | CWE-20 | Input validation, Confused deputy | P1 with HIGH-1 | `bot-components/github/GitHub_GitLab_sync.ml:49-56` |
-| HIGH-3 | GitLab and schedule secrets default to the GitHub webhook secret | ![High](https://img.shields.io/badge/High-e67e22) | CWE-1188 | Secret management | P6 | `src/config/config.ml:70-86` |
-| HIGH-4 | Tokens printed in command logs, git URLs, and process argv | ![High](https://img.shields.io/badge/High-e67e22) | CWE-532 | Credential exposure | P5 | `bot-components/utils/Git_utils.ml:20` |
-| HIGH-5 | `git_fetch` and `git_push` interpolate remote URLs into a shell unquoted | ![High](https://img.shields.io/badge/High-e67e22) | CWE-78 | Injection | P1 with CRITICAL-4; P2 with MEDIUM-6 | `bot-components/utils/Git_utils.ml:44,50` |
-| HIGH-6 | `git_test_modified` interpolates commit SHAs into a shell unquoted | ![High](https://img.shields.io/badge/High-e67e22) | CWE-78 | Injection | P1 with CRITICAL-4 | `bot-components/utils/Git_utils.ml:80` |
-| MEDIUM-1 | Minimize, CI-minimize, and resume commands have no authorization check | ![Medium](https://img.shields.io/badge/Medium-f39c12) | CWE-862 | Authorization | P2 | `src/webhooks/github.ml:77,98,111` |
-| MEDIUM-2 | *(Reserved / Retired label)* | -- | -- | -- | -- | -- |
-| MEDIUM-3 | Check re-run trusts `external_id` and retries GitLab as the bot | ![Medium](https://img.shields.io/badge/Medium-f39c12) | CWE-20 | Input validation | P2 with a signed event | `bot-components/utils/Minimize_parser.ml:179-190`, `bot-components/gitlab/GitLab_mutations.ml:7` |
-| MEDIUM-4 | Caller-supplied URLs are fetched with no allowlist | ![Medium](https://img.shields.io/badge/Medium-f39c12) | CWE-918 | SSRF | P1, P2 | `src/ci/minimization.ml:256` |
-| MEDIUM-5 | GitLab pipeline variables are copied into public GitHub Checks | ![Medium](https://img.shields.io/badge/Medium-f39c12) | CWE-200 | Information leak | P1 with HIGH-1 | `bot-components/ci/pipeline.ml:10-14` |
-| MEDIUM-6 | Default-branch `coqbot.toml` retargets where the GitLab token pushes | ![Medium](https://img.shields.io/badge/Medium-f39c12) | CWE-20 | Input validation | P2 as a repo admin | `bot-components/github/GitHub_GitLab_sync.ml:91-134` |
-| MEDIUM-7 | No body-size limit, no replay store, quadratic regexes | ![Medium](https://img.shields.io/badge/Medium-f39c12) | CWE-400 | Availability | P1 | `src/bot.ml:46` |
-| MEDIUM-8 | One GitLab webhook secret shared by all mapped projects | ![Medium](https://img.shields.io/badge/Medium-f39c12) | CWE-1188 | Secret management | P4 | `src/bot.ml:12-13` |
-| MEDIUM-9 | CI configuration gate checks the PR author, not the pusher | ![Medium](https://img.shields.io/badge/Medium-f39c12) | CWE-863 | Authorization | P2 | `src/actions/pr_sync.ml:55-58` |
-| MEDIUM-10 | Commit status body built by string concatenation; commit ref unvalidated in the URL path | ![Medium](https://img.shields.io/badge/Medium-f39c12) | CWE-116 | Injection, Input validation | P1 with HIGH-1 | `bot-components/github/GitHub_mutations.ml:272,278` |
-| MEDIUM-11 | Unauthenticated routes drive installation-token minting | ![Medium](https://img.shields.io/badge/Medium-f39c12) | CWE-770 | Availability | P1 | `bot-components/github/GitHub_installations.ml:52-79` |
-| LOW-1 | HMAC uses the SHA-1 header only | ![Low](https://img.shields.io/badge/Low-3498db) | CWE-328 | Cryptography | P1 | `bot-components/github/GitHub_subscriptions.ml:253-258` |
-| LOW-2 | Stale-PR secret comparison is not constant-time | ![Low](https://img.shields.io/badge/Low-3498db) | CWE-208 | Cryptography | P6 | `src/webhooks/scheduled.ml:13` |
-| LOW-3 | GraphQL node IDs are unvalidated opaque strings | ![Low](https://img.shields.io/badge/Low-3498db) | CWE-20 | Input validation | P1 with CRITICAL-1 | `bot-components/github/GitHub_ID.ml` |
-| LOW-4 | Token-backed job traces are published to GitHub | ![Low](https://img.shields.io/badge/Low-3498db) | CWE-200 | Information leak | P1 with HIGH-1 | `src/ci/job_status.ml:78-115` |
-| LOW-5 | JWT `iat` has no clock-skew margin | ![Low](https://img.shields.io/badge/Low-3498db) | CWE-703 | Availability | n/a | `bot-components/github/GitHub_app.ml:23-27` |
-| LOW-6 | `play_job` builds its JSON body by string concatenation | ![Low](https://img.shields.io/badge/Low-3498db) | CWE-116 | Injection, latent | none today | `bot-components/gitlab/GitLab_mutations.ml:45` |
-| LOW-7 | `get_build_trace` ignores the HTTP status code | ![Low](https://img.shields.io/badge/Low-3498db) | CWE-754 | Information leak | P1 with HIGH-1 | `bot-components/gitlab/GitLab_queries.ml:22-24` |
-| LOW-8 | Attacker input raises uncaught exceptions in the request path | ![Low](https://img.shields.io/badge/Low-3498db) | CWE-248 | Availability | P1 with HIGH-1 | `bot-components/github/GitHub_GitLab_sync.ml:58-63` |
-| LOW-9 | Bench authorization is decided after the API work it guards | ![Low](https://img.shields.io/badge/Low-3498db) | CWE-696 | Authorization ordering | P2 | `src/utils/bench.ml:245-301` |
-| INFO-1 | Exception hook prints raw exception text | ![Info](https://img.shields.io/badge/Info-7f8c8d) | -- | Logging | -- | `src/bot.ml:73-78` |
-| INFO-2 | TLS and platform IAM are outside this codebase | ![Info](https://img.shields.io/badge/Info-7f8c8d) | -- | Deployment | -- | `src/bot.ml:70` |
-| INFO-3 | Installation tokens live in an in-process hashtable | ![Info](https://img.shields.io/badge/Info-7f8c8d) | -- | Key management | -- | `bot-components/github/GitHub_installations.ml:8-9` |
-| INFO-4 | No secret-rotation runbook | ![Info](https://img.shields.io/badge/Info-7f8c8d) | -- | Process | -- | -- |
-| INFO-5 | Live credentials present in `.bot-env` on disk | ![Info](https://img.shields.io/badge/Info-7f8c8d) | -- | Secret hygiene | -- | `.bot-env` |
-| INFO-6 | No HTTP method enforcement on any route | ![Info](https://img.shields.io/badge/Info-7f8c8d) | -- | Hardening | -- | `src/bot.ml:39-67` |
-| INFO-7 | GitHub App private key PEM in the workspace is world-readable | ![Info](https://img.shields.io/badge/Info-7f8c8d) | -- | Secret hygiene | -- | `app-bot-demo.2025-10-31.private-key.pem` |
-| INFO-8 | No CORS restrictions or origin validation | ![Info](https://img.shields.io/badge/Info-7f8c8d) | -- | Hardening | -- | `src/bot.ml:39-67` |
+| ID | Title | Sev | Status | CWE | Category | Reachable by | Primary location |
+|----|-------|-----|--------|-----|----------|--------------|-----------------|
+| CRITICAL-1 | Minimizer callbacks have no authentication | ![Critical](https://img.shields.io/badge/Critical-c0392b) | `CONFIRMED` | CWE-306 | Authentication, Confused deputy | P1 | `src/bot.ml:60`, `src/ci/minimization.ml:1376` |
+| CRITICAL-2 | Shell command injection in the branch-delete command | ![Critical](https://img.shields.io/badge/Critical-c0392b) | `CONFIRMED` | CWE-78 | Injection | P1 | `src/ci/minimization.ml:1394` |
+| CRITICAL-3 | Unauthenticated resume writes an attacker-chosen workflow image | ![Critical](https://img.shields.io/badge/Critical-c0392b) | `CONFIRMED` | CWE-306 | Authentication, Supply chain | P1 | `src/ci/minimization.ml:1409`, `run_ci_minimization.sh:55` |
+| CRITICAL-4 | GitHub webhooks without `installation.id` skip signature verification | ![Critical](https://img.shields.io/badge/Critical-c0392b) | `CONFIRMED` | CWE-347 | Authentication | P1 | `bot-components/github/GitHub_subscriptions.ml:249-263` |
+| HIGH-1 | GitLab webhooks without a token are processed as valid | ![High](https://img.shields.io/badge/High-e67e22) | `CONFIRMED` | CWE-306 | Authentication | P1 | `bot-components/gitlab/GitLab_subscriptions.ml:114-119` |
+| HIGH-2 | Unmapped GitLab path is used directly as a GitHub `owner/repo` | ![High](https://img.shields.io/badge/High-e67e22) | `CONFIRMED` | CWE-20 | Input validation, Confused deputy | P1 with HIGH-1 | `bot-components/github/GitHub_GitLab_sync.ml:49-56` |
+| HIGH-3 | GitLab and schedule secrets default to the GitHub webhook secret | ![High](https://img.shields.io/badge/High-e67e22) | `CONFIRMED` | CWE-1188 | Secret management | P6 | `src/config/config.ml:70-86` |
+| HIGH-4 | Tokens printed in command logs, git URLs, and process argv | ![High](https://img.shields.io/badge/High-e67e22) | `CONFIRMED` | CWE-532 | Credential exposure | P5 | `bot-components/utils/Git_utils.ml:20` |
+| HIGH-5 | `git_fetch` and `git_push` interpolate remote URLs into a shell unquoted | ![High](https://img.shields.io/badge/High-e67e22) | `CONFIRMED` | CWE-78 | Injection | P1 with CRITICAL-4; P2 with MEDIUM-6 | `bot-components/utils/Git_utils.ml:44,50` |
+| HIGH-6 | `git_test_modified` interpolates commit SHAs into a shell unquoted | ![High](https://img.shields.io/badge/High-e67e22) | `CONFIRMED` | CWE-78 | Injection | P1 with CRITICAL-4 | `bot-components/utils/Git_utils.ml:80` |
+| MEDIUM-1 | Minimize, CI-minimize, and resume commands have no authorization check | ![Medium](https://img.shields.io/badge/Medium-f39c12) | `CONFIRMED` | CWE-862 | Authorization | P2 | `src/webhooks/github.ml:77,98,111` |
+| MEDIUM-2 | *(Reserved / Retired label)* | -- | -- | -- | -- | -- | -- |
+| MEDIUM-3 | Check re-run trusts `external_id` and retries GitLab as the bot | ![Medium](https://img.shields.io/badge/Medium-f39c12) | `CONFIRMED` | CWE-20 | Input validation | P2 with a signed event | `bot-components/utils/Minimize_parser.ml:179-190`, `bot-components/gitlab/GitLab_mutations.ml:7` |
+| MEDIUM-4 | Caller-supplied URLs are fetched with no allowlist | ![Medium](https://img.shields.io/badge/Medium-f39c12) | `CONFIRMED` | CWE-918 | SSRF | P1, P2 | `src/ci/minimization.ml:256` |
+| MEDIUM-5 | GitLab pipeline variables are copied into public GitHub Checks | ![Medium](https://img.shields.io/badge/Medium-f39c12) | `CONFIRMED` | CWE-200 | Information leak | P1 with HIGH-1 | `bot-components/ci/pipeline.ml:10-14` |
+| MEDIUM-6 | Default-branch `coqbot.toml` retargets where the GitLab token pushes | ![Medium](https://img.shields.io/badge/Medium-f39c12) | `CONFIRMED` | CWE-20 | Input validation | P2 as a repo admin | `bot-components/github/GitHub_GitLab_sync.ml:91-134` |
+| MEDIUM-7 | No body-size limit, no replay store, quadratic regexes | ![Medium](https://img.shields.io/badge/Medium-f39c12) | `CONFIRMED` | CWE-400 | Availability | P1 | `src/bot.ml:46` |
+| MEDIUM-8 | One GitLab webhook secret shared by all mapped projects | ![Medium](https://img.shields.io/badge/Medium-f39c12) | `CONFIRMED` | CWE-1188 | Secret management | P4 | `src/bot.ml:12-13` |
+| MEDIUM-9 | CI configuration gate checks the PR author, not the pusher | ![Medium](https://img.shields.io/badge/Medium-f39c12) | `CONFIRMED` | CWE-863 | Authorization | P2 | `src/actions/pr_sync.ml:55-58` |
+| MEDIUM-10 | Commit status body built by string concatenation; commit ref unvalidated in the URL path | ![Medium](https://img.shields.io/badge/Medium-f39c12) | `CONFIRMED` | CWE-116 | Injection, Input validation | P1 with HIGH-1 | `bot-components/github/GitHub_mutations.ml:272,278` |
+| MEDIUM-11 | Unauthenticated routes drive installation-token minting | ![Medium](https://img.shields.io/badge/Medium-f39c12) | `CONFIRMED` | CWE-770 | Availability | P1 | `bot-components/github/GitHub_installations.ml:52-79` |
+| LOW-1 | HMAC uses the SHA-1 header only | ![Low](https://img.shields.io/badge/Low-3498db) | `CONFIRMED` | CWE-328 | Cryptography | P1 | `bot-components/github/GitHub_subscriptions.ml:253-258` |
+| LOW-2 | Stale-PR secret comparison is not constant-time | ![Low](https://img.shields.io/badge/Low-3498db) | `CONFIRMED` | CWE-208 | Cryptography | P6 | `src/webhooks/scheduled.ml:13` |
+| LOW-3 | GraphQL node IDs are unvalidated opaque strings | ![Low](https://img.shields.io/badge/Low-3498db) | `CONFIRMED` | CWE-20 | Input validation | P1 with CRITICAL-1 | `bot-components/github/GitHub_ID.ml` |
+| LOW-4 | Token-backed job traces are published to GitHub | ![Low](https://img.shields.io/badge/Low-3498db) | `CONFIRMED` | CWE-200 | Information leak | P1 with HIGH-1 | `src/ci/job_status.ml:78-115` |
+| LOW-5 | JWT `iat` has no clock-skew margin | ![Low](https://img.shields.io/badge/Low-3498db) | `CONFIRMED` | CWE-703 | Availability | n/a | `bot-components/github/GitHub_app.ml:23-27` |
+| LOW-6 | `play_job` builds its JSON body by string concatenation | ![Low](https://img.shields.io/badge/Low-3498db) | `POTENTIAL` | CWE-116 | Injection, latent | none today | `bot-components/gitlab/GitLab_mutations.ml:45` |
+| LOW-7 | `get_build_trace` ignores the HTTP status code | ![Low](https://img.shields.io/badge/Low-3498db) | `CONFIRMED` | CWE-754 | Information leak | P1 with HIGH-1 | `bot-components/gitlab/GitLab_queries.ml:22-24` |
+| LOW-8 | Attacker input raises uncaught exceptions in the request path | ![Low](https://img.shields.io/badge/Low-3498db) | `CONFIRMED` | CWE-248 | Availability | P1 with HIGH-1 | `bot-components/github/GitHub_GitLab_sync.ml:58-63` |
+| LOW-9 | Bench authorization is decided after the API work it guards | ![Low](https://img.shields.io/badge/Low-3498db) | `CONFIRMED` | CWE-696 | Authorization ordering | P2 | `src/utils/bench.ml:245-301` |
+| INFO-1 | Exception hook prints raw exception text | ![Info](https://img.shields.io/badge/Info-7f8c8d) | `CONFIRMED` | -- | Logging | -- | `src/bot.ml:73-78` |
+| INFO-2 | TLS and platform IAM are outside this codebase | ![Info](https://img.shields.io/badge/Info-7f8c8d) | `CONFIRMED` | -- | Deployment | -- | `src/bot.ml:70` |
+| INFO-3 | Installation tokens live in an in-process hashtable | ![Info](https://img.shields.io/badge/Info-7f8c8d) | `CONFIRMED` | -- | Key management | -- | `bot-components/github/GitHub_installations.ml:8-9` |
+| INFO-4 | No secret-rotation runbook | ![Info](https://img.shields.io/badge/Info-7f8c8d) | `CONFIRMED` | -- | Process | -- | -- |
+| INFO-5 | Live credentials present in `.bot-env` on disk | ![Info](https://img.shields.io/badge/Info-7f8c8d) | `CONFIRMED` | -- | Secret hygiene | -- | `.bot-env` |
+| INFO-6 | No HTTP method enforcement on any route | ![Info](https://img.shields.io/badge/Info-7f8c8d) | `CONFIRMED` | -- | Hardening | -- | `src/bot.ml:39-67` |
+| INFO-7 | GitHub App private key PEM in the workspace is world-readable | ![Info](https://img.shields.io/badge/Info-7f8c8d) | `CONFIRMED` | -- | Secret hygiene | -- | `app-bot-demo.2025-10-31.private-key.pem` |
+| INFO-8 | No CORS restrictions or origin validation | ![Info](https://img.shields.io/badge/Info-7f8c8d) | `CONFIRMED` | -- | Hardening | -- | `src/bot.ml:39-67` |
 
-### Attack chains
+---
 
-The critical findings are not independent. CRITICAL-4 and HIGH-1 are the sources that
-make several injection sinks attacker-reachable.
+## 10. Attack chains
+
+The critical findings are not independent. CRITICAL-4 and HIGH-1 are the sources that make several injection sinks attacker-reachable.
 
 ```mermaid
 flowchart LR
@@ -288,11 +425,13 @@ flowchart LR
 
 ---
 
-## ![Critical](https://img.shields.io/badge/Critical-c0392b) Critical findings
+## 11. ![Critical](https://img.shields.io/badge/Critical-c0392b) Critical findings
 
 ### ![Critical](https://img.shields.io/badge/Critical-c0392b) CRITICAL-1 -- Minimizer callbacks have no authentication
 
-**CWE-306 Missing Authentication for Critical Function. Reachable by P1.**
+**CWE-306 Missing Authentication for Critical Function. Status: `CONFIRMED`. Reachable by P1.**
+
+**Related files**: `src/bot.ml`, `src/webhooks/minimizer.ml`, `src/ci/minimization.ml`
 
 The router dispatches three routes with no secret, no HMAC, and no caller identity:
 
@@ -344,7 +483,9 @@ the bot pushed and reject stamps that do not match a pending job.
 
 ### ![Critical](https://img.shields.io/badge/Critical-c0392b) CRITICAL-2 -- Shell command injection in the branch-delete command
 
-**CWE-78 OS Command Injection. Reachable by P1 through CRITICAL-1.**
+**CWE-78 OS Command Injection. Status: `CONFIRMED`. Reachable by P1 through CRITICAL-1.**
+
+**Related files**: `src/ci/minimization.ml`, `bot-components/utils/Git_utils.ml`
 
 ```ocaml
 (* src/ci/minimization.ml:1393-1397 *)
@@ -390,9 +531,7 @@ Two conclusions follow, and the second matters for the fix:
 2. **The benign path is already broken.** With a normal branch name the command is
    always a shell syntax error, so branch cleanup in `run-coq-bug-minimizer` has never
    worked on this code path. The delete is dead code that only functions when an
-   attacker supplies the balancing quote. This is direct evidence the path has no test
-   coverage, and it means the fix can be validated by asserting that a benign delete
-   now succeeds.
+   attacker supplies the balancing quote.
 
 **Fix.** Do not build a shell string. Use `Lwt_process.exec` with an argument vector, or
 at minimum `Stdlib.Filename.quote_command`, and pass the credential through a git
@@ -402,7 +541,9 @@ credential helper or `http.extraHeader` rather than embedding it in the URL.
 
 ### ![Critical](https://img.shields.io/badge/Critical-c0392b) CRITICAL-3 -- Unauthenticated resume writes an attacker-chosen workflow image
 
-**CWE-306 Missing Authentication for Critical Function. Reachable by P1.**
+**CWE-306 Missing Authentication for Critical Function. Status: `CONFIRMED`. Reachable by P1.**
+
+**Related files**: `src/ci/minimization.ml`, `run_ci_minimization.sh`
 
 `/resume-ci-minimization` parses `docker_image` and the remaining fields straight from
 the unauthenticated body:
@@ -422,7 +563,7 @@ match Str.split (Str.regexp " ") stamp with
 pushed with the PAT:
 
 ```bash
-# run_ci_minimization.sh:56
+# run_ci_minimization.sh:55
 sed -i 's~^\(\s*\)[^:\s]*custom_image:.*$~\1custom_image: '"'${docker_image}'~" .github/workflows/main.yml
 # run_ci_minimization.sh:78
 git push --set-upstream "https://$bot_name:$token@github.com/$repo_name.git" "$branch_name"
@@ -440,7 +581,9 @@ registry and repository allowlist before it reaches `sed`.
 
 ### ![Critical](https://img.shields.io/badge/Critical-c0392b) CRITICAL-4 -- GitHub webhooks without `installation.id` skip signature verification
 
-**CWE-347 Improper Verification of Cryptographic Signature. Reachable by P1.**
+**CWE-347 Improper Verification of Cryptographic Signature. Status: `CONFIRMED`. Reachable by P1.**
+
+**Related files**: `bot-components/github/GitHub_subscriptions.ml`, `tests/test_webhook.ml`
 
 ```ocaml
 (* bot-components/github/GitHub_subscriptions.ml:248-263 *)
@@ -495,11 +638,13 @@ installation up by the `owner` field taken from the request body
 
 ---
 
-## ![High](https://img.shields.io/badge/High-e67e22) High findings
+## 12. ![High](https://img.shields.io/badge/High-e67e22) High findings
 
 ### ![High](https://img.shields.io/badge/High-e67e22) HIGH-1 -- GitLab webhooks without a token are processed as valid
 
-**CWE-306. Reachable by P1.**
+**CWE-306. Status: `CONFIRMED`. Reachable by P1.**
+
+**Related files**: `bot-components/gitlab/GitLab_subscriptions.ml`, `src/webhooks/gitlab.ml`
 
 ```ocaml
 (* bot-components/gitlab/GitLab_subscriptions.ml:113-125 *)
@@ -534,7 +679,9 @@ redundant and should be removed rather than left as a trap for future handlers.
 
 ### ![High](https://img.shields.io/badge/High-e67e22) HIGH-2 -- Unmapped GitLab path is used directly as a GitHub `owner/repo`
 
-**CWE-20. Reachable by P1 in combination with HIGH-1.**
+**CWE-20. Status: `CONFIRMED`. Reachable by P1 in combination with HIGH-1.**
+
+**Related files**: `bot-components/github/GitHub_GitLab_sync.ml`
 
 ```ocaml
 (* bot-components/github/GitHub_GitLab_sync.ml:48-56 *)
@@ -559,7 +706,9 @@ not configured is not a repository the bot should act on.
 
 ### ![High](https://img.shields.io/badge/High-e67e22) HIGH-3 -- GitLab and schedule secrets default to the GitHub webhook secret
 
-**CWE-1188 Insecure Default Initialization. Reachable by P6.**
+**CWE-1188 Insecure Default Initialization. Status: `CONFIRMED`. Reachable by P6.**
+
+**Related files**: `src/config/config.ml`
 
 ```ocaml
 (* src/config/config.ml:70-86 *)
@@ -592,7 +741,9 @@ Silent credential reuse should never be a default.
 
 ### ![High](https://img.shields.io/badge/High-e67e22) HIGH-4 -- Tokens printed in command logs, git URLs, and process argv
 
-**CWE-532 Insertion of Sensitive Information into Log File. Reachable by P5.**
+**CWE-532 Insertion of Sensitive Information into Log File. Status: `CONFIRMED`. Reachable by P5.**
+
+**Related files**: `bot-components/utils/Git_utils.ml`, `coq_bug_minimizer.sh`, `run_ci_minimization.sh`
 
 ```ocaml
 (* bot-components/utils/Git_utils.ml:19-22 *)
@@ -607,7 +758,7 @@ let execute_cmd ?(mask = []) command =
 masked.
 
 | Call site | Credential exposed | Masking |
-|-----------|--------------------|---------|
+|-----------|--------------------|---------| 
 | `src/ci/minimization.ml:1394` | GitHub PAT inside the push URL | No `~mask` argument at all |
 | `src/utils/coq.ml:12-24` | GitHub PAT as a positional argument | `~mask` passed, but the print at line 20 precedes it |
 | `bot-components/github/GitHub_GitLab_sync.ml:42` | GitLab token inside `https://oauth2:TOKEN@host` | No mask; every `mirror_action` and `update_pr` |
@@ -621,7 +772,9 @@ not placing the secret on the command line is the control.
 
 ### ![High](https://img.shields.io/badge/High-e67e22) HIGH-5 -- `git_fetch` and `git_push` interpolate remote URLs into a shell unquoted
 
-**CWE-78. Reachable by P1 with CRITICAL-4, or by P2 with MEDIUM-6.**
+**CWE-78. Status: `CONFIRMED`. Reachable by P1 with CRITICAL-4, or by P2 with MEDIUM-6.**
+
+**Related files**: `bot-components/utils/Git_utils.ml`
 
 ```ocaml
 (* bot-components/utils/Git_utils.ml:43-54 *)
@@ -656,7 +809,9 @@ vector so quoting correctness is structural rather than remembered.
 
 ### ![High](https://img.shields.io/badge/High-e67e22) HIGH-6 -- `git_test_modified` interpolates commit SHAs into a shell unquoted
 
-**CWE-78. Reachable by P1 with CRITICAL-4.**
+**CWE-78. Status: `CONFIRMED`. Reachable by P1 with CRITICAL-4.**
+
+**Related files**: `bot-components/utils/Git_utils.ml`, `src/actions/pr_sync.ml`
 
 ```ocaml
 (* bot-components/utils/Git_utils.ml:78-82 *)
@@ -696,11 +851,13 @@ Validate that SHAs match `[0-9a-f]{7,40}` at the parsing boundary.
 
 ---
 
-## ![Medium](https://img.shields.io/badge/Medium-f39c12) Medium findings
+## 13. ![Medium](https://img.shields.io/badge/Medium-f39c12) Medium findings
 
 ### ![Medium](https://img.shields.io/badge/Medium-f39c12) MEDIUM-1 -- Minimize, CI-minimize, and resume commands have no authorization check
 
-**CWE-862 Missing Authorization. Reachable by P2.**
+**CWE-862 Missing Authorization. Status: `CONFIRMED`. Reachable by P2.**
+
+**Related files**: `src/webhooks/github.ml`
 
 ```ocaml
 (* src/webhooks/github.ml:76-92 *)
@@ -738,7 +895,9 @@ nothing gates who may start it.
 
 ### ![Medium](https://img.shields.io/badge/Medium-f39c12) MEDIUM-3 -- Check re-run trusts `external_id` and retries GitLab as the bot
 
-**CWE-20. Requires a signed event, so P2 with a legitimate check re-request.**
+**CWE-20. Status: `CONFIRMED`. Requires a signed event, so P2 with a legitimate check re-request.**
+
+**Related files**: `bot-components/utils/Minimize_parser.ml`, `bot-components/gitlab/GitLab_mutations.ml`
 
 Unsigned re-runs are rejected at `github.ml:363-365`; that control is correct. Signed
 re-runs parse the identifier and act on it:
@@ -776,7 +935,9 @@ reject the single-field legacy form.
 
 ### ![Medium](https://img.shields.io/badge/Medium-f39c12) MEDIUM-4 -- Caller-supplied URLs are fetched with no allowlist
 
-**CWE-918 Server-Side Request Forgery. Reachable by P1 and P2.**
+**CWE-918 Server-Side Request Forgery. Status: `CONFIRMED`. Reachable by P1 and P2.**
+
+**Related files**: `src/ci/minimization.ml`, `bot-components/utils/HTTP_utils.ml`
 
 ```ocaml
 (* src/ci/minimization.ml:220-258 *)
@@ -804,7 +965,9 @@ the redirect chain.
 
 ### ![Medium](https://img.shields.io/badge/Medium-f39c12) MEDIUM-5 -- GitLab pipeline variables are copied into public GitHub Checks
 
-**CWE-200. Reachable by P1 with HIGH-1.**
+**CWE-200. Status: `CONFIRMED`. Reachable by P1 with HIGH-1.**
+
+**Related files**: `bot-components/ci/pipeline.ml`
 
 ```ocaml
 (* bot-components/ci/pipeline.ml:9-14 *)
@@ -828,7 +991,9 @@ attacker injects arbitrary Markdown into a Check on a repository they do not con
 
 ### ![Medium](https://img.shields.io/badge/Medium-f39c12) MEDIUM-6 -- Default-branch `coqbot.toml` retargets where the GitLab token pushes
 
-**CWE-20. Reachable by P2 acting as an administrator of an installed repository.**
+**CWE-20. Status: `CONFIRMED`. Reachable by P2 acting as an administrator of an installed repository.**
+
+**Related files**: `bot-components/github/GitHub_GitLab_sync.ml`
 
 ```ocaml
 (* bot-components/github/GitHub_GitLab_sync.ml:84-134 *)
@@ -868,7 +1033,9 @@ from repository content.
 
 ### ![Medium](https://img.shields.io/badge/Medium-f39c12) MEDIUM-7 -- No body-size limit, no replay store, quadratic regexes
 
-**CWE-400 Uncontrolled Resource Consumption. Reachable by P1.**
+**CWE-400 Uncontrolled Resource Consumption. Status: `CONFIRMED`. Reachable by P1.**
+
+**Related files**: `src/bot.ml`
 
 `src/bot.ml:46` calls `Cohttp_lwt.Body.to_string body` with no cap, for every route,
 before any authentication decision. The whole body is buffered in memory. The bot then
@@ -896,7 +1063,9 @@ and bound in-flight `Lwt.async` work.
 
 ### ![Medium](https://img.shields.io/badge/Medium-f39c12) MEDIUM-8 -- One GitLab webhook secret shared by all mapped projects
 
-**CWE-1188. Reachable by P4.**
+**CWE-1188. Status: `CONFIRMED`. Reachable by P4.**
+
+**Related files**: `src/bot.ml`
 
 ```ocaml
 (* src/bot.ml:12-13 *)
@@ -916,7 +1085,9 @@ using the payload's project identity before verification.
 
 ### ![Medium](https://img.shields.io/badge/Medium-f39c12) MEDIUM-9 -- CI configuration gate checks the PR author, not the pusher
 
-**CWE-863 Incorrect Authorization. Reachable by P2.**
+**CWE-863 Incorrect Authorization. Status: `CONFIRMED`. Reachable by P2.**
+
+**Related files**: `src/actions/pr_sync.ml`
 
 ```ocaml
 (* src/actions/pr_sync.ml:55-58 *)
@@ -940,7 +1111,9 @@ actor as distinct throughout the authorization logic.
 
 ### ![Medium](https://img.shields.io/badge/Medium-f39c12) MEDIUM-10 -- Commit status body built by string concatenation; commit ref unvalidated in the URL path
 
-**CWE-116 Improper Encoding. Reachable by P1 with HIGH-1.**
+**CWE-116 Improper Encoding. Status: `CONFIRMED`. Reachable by P1 with HIGH-1.**
+
+**Related files**: `bot-components/github/GitHub_mutations.ml`
 
 ```ocaml
 (* bot-components/github/GitHub_mutations.ml:266-280 *)
@@ -976,7 +1149,9 @@ the point it is parsed out of the webhook.
 
 ### ![Medium](https://img.shields.io/badge/Medium-f39c12) MEDIUM-11 -- Unauthenticated routes drive installation-token minting
 
-**CWE-770 Allocation Without Limits. Reachable by P1.**
+**CWE-770 Allocation Without Limits. Status: `CONFIRMED`. Reachable by P1.**
+
+**Related files**: `bot-components/github/GitHub_installations.ml`
 
 ```ocaml
 (* bot-components/github/GitHub_installations.ml:52-79 *)
@@ -1006,22 +1181,25 @@ with a short TTL, and rate-limit the installation lookup path.
 
 ---
 
-## ![Low](https://img.shields.io/badge/Low-3498db) Low findings
+## 14. ![Low](https://img.shields.io/badge/Low-3498db) Low findings
 
 ### ![Low](https://img.shields.io/badge/Low-3498db) LOW-1 -- HMAC uses the SHA-1 header only
 
-**CWE-328.** `GitHub_subscriptions.ml:253-258` reads `X-Hub-Signature` and computes
-HMAC-SHA1. The comparison is constant-time via `Eqaf.equal`, and HMAC-SHA1 is not
-practically forgeable without the key, so this is a header-choice issue rather than a
-break. GitHub's documented preferred header is `X-Hub-Signature-256`. The bot never
-reads it, so if GitHub stops sending the SHA-1 header, verification falls into the
-`None` branch. Combined with CRITICAL-4 that branch is not uniformly fail-closed.
+**CWE-328. Status: `CONFIRMED`.**
+
+**Related files**: `bot-components/github/GitHub_subscriptions.ml`
+
+`GitHub_subscriptions.ml:253-258` reads `X-Hub-Signature` and computes HMAC-SHA1. The comparison is constant-time via `Eqaf.equal`, and HMAC-SHA1 is not practically forgeable without the key, so this is a header-choice issue rather than a break. GitHub's documented preferred header is `X-Hub-Signature-256`. The bot never reads it, so if GitHub stops sending the SHA-1 header, verification falls into the `None` branch. Combined with CRITICAL-4 that branch is not uniformly fail-closed.
 
 **Fix.** Prefer `X-Hub-Signature-256`, accept SHA-1 only as a transitional fallback.
 
 ### ![Low](https://img.shields.io/badge/Low-3498db) LOW-2 -- Stale-PR secret comparison is not constant-time
 
-**CWE-208.** `src/webhooks/scheduled.ml:13` uses `String.equal secret daily_schedule_secret`,
+**CWE-208. Status: `CONFIRMED`.**
+
+**Related files**: `src/webhooks/scheduled.ml`
+
+`src/webhooks/scheduled.ml:13` uses `String.equal secret daily_schedule_secret`,
 which short-circuits at the first differing byte. The secret also travels in the request
 body as the third colon-separated field, so it appears in any access log that records
 bodies, and replay is free because there is no nonce or timestamp.
@@ -1030,7 +1208,11 @@ bodies, and replay is free because there is no nonce or timestamp.
 
 ### ![Low](https://img.shields.io/badge/Low-3498db) LOW-3 -- GraphQL node IDs are unvalidated opaque strings
 
-**CWE-20.** `GitHub_ID.of_string` wraps any string. The type carries no evidence that an
+**CWE-20. Status: `CONFIRMED`.**
+
+**Related files**: `bot-components/github/GitHub_ID.ml`
+
+`GitHub_ID.of_string` wraps any string. The type carries no evidence that an
 ID is well formed or that it names a node the bot created. Validation must therefore
 happen at each call site, and the minimizer callbacks do not do it, which is what makes
 CRITICAL-1's comment impersonation possible.
@@ -1040,7 +1222,11 @@ smart-constructor `GitHub_ID` would make the omission a type error.
 
 ### ![Low](https://img.shields.io/badge/Low-3498db) LOW-4 -- Token-backed job traces are published to GitHub
 
-**CWE-200.** On job failure the bot reads `/jobs/:id/trace` with the GitLab token and
+**CWE-200. Status: `CONFIRMED`.**
+
+**Related files**: `src/ci/job_status.ml`
+
+On job failure the bot reads `/jobs/:id/trace` with the GitLab token and
 embeds an excerpt in the Check body (`job_status.ml:78-115`). Under HIGH-1 the job ID is
 attacker-chosen, and any credential a legitimate trace contains becomes public GitHub
 content. Reporting the trace is the feature; treating a token-authenticated read as
@@ -1051,7 +1237,9 @@ in projects the event was authenticated for.
 
 ### ![Low](https://img.shields.io/badge/Low-3498db) LOW-5 -- JWT `iat` has no clock-skew margin
 
-**CWE-703.**
+**CWE-703. Status: `CONFIRMED`.**
+
+**Related files**: `bot-components/github/GitHub_app.ml`
 
 ```ocaml
 (* bot-components/github/GitHub_app.ml:22-27 *)
@@ -1069,7 +1257,9 @@ fail. This is availability only: it fails closed.
 
 ### ![Low](https://img.shields.io/badge/Low-3498db) LOW-6 -- `play_job` builds its JSON body by string concatenation
 
-**CWE-116, latent.**
+**CWE-116, latent. Status: `POTENTIAL`.**
+
+**Related files**: `bot-components/gitlab/GitLab_mutations.ml`
 
 ```ocaml
 (* bot-components/gitlab/GitLab_mutations.ml:39-48 *)
@@ -1087,7 +1277,9 @@ as MEDIUM-10 and becomes exploitable the moment a caller forwards user input.
 
 ### ![Low](https://img.shields.io/badge/Low-3498db) LOW-7 -- `get_build_trace` ignores the HTTP status code
 
-**CWE-754.**
+**CWE-754. Status: `CONFIRMED`.**
+
+**Related files**: `bot-components/gitlab/GitLab_queries.ml`
 
 ```ocaml
 (* bot-components/gitlab/GitLab_queries.ml:22-24 *)
@@ -1105,7 +1297,9 @@ responses, and it silently corrupts the retry heuristics in `trace_action`.
 
 ### ![Low](https://img.shields.io/badge/Low-3498db) LOW-8 -- Attacker input raises uncaught exceptions in the request path
 
-**CWE-248.**
+**CWE-248. Status: `CONFIRMED`.**
+
+**Related files**: `bot-components/github/GitHub_GitLab_sync.ml`
 
 `github_repo_of_gitlab_project_path` calls `failwith` when the resolved name does not
 split into exactly two segments:
@@ -1134,7 +1328,9 @@ aborts PR synchronisation through the async exception hook.
 
 ### ![Low](https://img.shields.io/badge/Low-3498db) LOW-9 -- Bench authorization is decided after the API work it guards
 
-**CWE-696 Incorrect Behavior Order.**
+**CWE-696 Incorrect Behavior Order. Status: `CONFIRMED`.**
+
+**Related files**: `src/utils/bench.ml`
 
 ```ocaml
 (* src/utils/bench.ml:245-305 *)
@@ -1163,7 +1359,7 @@ errors.
 
 ---
 
-## ![Info](https://img.shields.io/badge/Info-7f8c8d) Info
+## 15. ![Info](https://img.shields.io/badge/Info-7f8c8d) Info
 
 | | ID | Observation | Detail |
 |---|----|-------------|--------|
@@ -1178,22 +1374,22 @@ errors.
 
 ---
 
-## ![Accepted](https://img.shields.io/badge/Accepted-27ae60) Accepted risks
+## 16. ![Accepted](https://img.shields.io/badge/Accepted-27ae60) Accepted risks
 
 These are design decisions, documented so that reports about them can be closed quickly.
 
 | | ID | Risk | Why accepted | Residual control |
-|---|----|------|--------------|------------------|
+|---|----|------|--------------|-----------------|
 | ![Accepted](https://img.shields.io/badge/Accepted-27ae60) | ACCEPTED-1 | Untrusted PR heads are merged and force-pushed to GitLab as `pr-N` | This is the product. `pr_sync.ml` merging head with base and pushing is working as designed | GitLab protected-branch and protected-variable configuration, an operator responsibility documented at `README.md:47-50`. The bot cannot read those settings |
 | ![Accepted](https://img.shields.io/badge/Accepted-27ae60) | ACCEPTED-2 | `@bot merge now` merges on one comment | The gates are deliberate: not the author, in assignees, no `needs:*` label, has a `kind:*` label, has a milestone, review decision `APPROVED`, target branch `master`, comment not email-originated, and membership of `@rocq-prover/pushers` (`GitHub_automation.ml:10-108`) | Account compromise of a pusher is out of scope. The email-origin rejection is an authenticity control and should be kept |
 | ![Accepted](https://img.shields.io/badge/Accepted-27ae60) | ACCEPTED-3 | The minimizer runs commenter-supplied Coq and shell scripts | Execution is on GitHub Actions in `run-coq-bug-minimizer`, not on the bot host | Who may start it is MEDIUM-1 and is not accepted. Host-side execution via CRITICAL-2 is not accepted |
 
 ---
 
-## What is not a vulnerability here
+## 17. What is not a vulnerability here
 
 | Claim | Assessment |
-|-------|------------|
+|-------|-----------|
 | Rocq or Coq kernel soundness | Out of scope for this repository. Welcomed as public issues on the Rocq repository |
 | GitHub, GitLab, or Heroku platform security | Out of scope except where consumed by this bot |
 | Account compromise of a user with bot repository access | Out of scope |
@@ -1208,7 +1404,7 @@ These are design decisions, documented so that reports about them can be closed 
 
 ---
 
-## Control objectives and current state
+## 18. Control objectives and current state
 
 | ID | Objective | State | Blocking findings |
 |----|-----------|-------|-------------------|
@@ -1227,7 +1423,7 @@ These are design decisions, documented so that reports about them can be closed 
 
 ---
 
-## Remediation plan
+## 19. Remediation plan
 
 Ordered by risk reduction per unit of work. Stage 1 items should land before this
 document is made public, because it contains a working exploitation recipe for
@@ -1297,7 +1493,7 @@ flowchart LR
 
 ---
 
-## Regression tests to add
+## 20. Regression tests to add
 
 Each test should fail against the current tree and pass after the corresponding fix.
 `tests/test_webhook.ml` currently asserts the CRITICAL-4 behaviour as correct and must be
@@ -1322,7 +1518,7 @@ updated rather than extended.
 
 ---
 
-## Vulnerability disclosure policy
+## 21. Vulnerability disclosure policy
 
 `SECURITY.md` at the repository root is the public entry point and should link here.
 
@@ -1345,7 +1541,7 @@ updated rather than extended.
   `/push`, `/pull_request`, `/job`, and `/pipeline`.
 - Causing the bot to comment, create or update Check Runs, delete branches, or merge
   pull requests without a legitimate triggering event.
-- Causing the bot to expose or misuse any credential listed in [Assets](#assets).
+- Causing the bot to expose or misuse any credential listed in [Assets](#6-assets).
 - Shell injection or code execution on the bot host.
 - Credential exposure via logs, process argv, or HTTP responses.
 - Server-side request forgery from the bot host.
