@@ -1,1812 +1,424 @@
-# MASTER PROMPT — ROcq BOT SECURITY REVISIT, THREAT MODEL, VERIFICATION & SECURITY DOCUMENTATION
+# 🔐 Rocq Bot Security Audit - Master Prompt
 
-## 0. Mission
+You are performing a **practical source-code security audit** of the Rocq Prover
+Bot (`coqbot` / `rocqbot`): an internet-facing OCaml automation service that holds
+a GitHub App private key, a GitHub PAT, and GitLab API tokens, and that can push
+to repositories, drive CI, and execute shell/Docker on its host.
 
-Perform a rigorous, evidence-driven security revisit of the **Rocq Prover bot** repository.
+The audit exists to answer **one question**:
 
-Treat the system as a:
+> ❓ **Can an untrusted person cause the bot to perform a privileged operation
+> that person is not authorized to cause?**
 
-> **Privileged, event-driven DevOps automation service integrating GitHub, GitLab, repositories, CI/CD, Docker/container execution, and shell commands.**
-
-This is **not** merely a chatbot or generic web application.
-
-The primary security question is:
-
-> **Can an untrusted external actor cause the bot to perform a privileged action that the actor is not authorized to cause?**
-
-Do not assume that existing security documentation, previous audits, comments, tests, or claimed fixes are correct.
-
-The current source tree, configuration, tests, deployment configuration, and observed runtime behavior are the evidence.
+Everything below serves that question. Audit for real, reachable compromise - not
+for enterprise-compliance completeness.
 
 ---
 
-# 1. Core Audit Principles
+## 1. 🎯 Scope and non-goals
 
-Follow these principles throughout the audit.
+**In scope**
 
-### 1.1 Evidence over claims
+- `src/` (HTTP server, webhooks, actions, CI, config)
+- `bot-components/` (GitHub/GitLab integration, git/HTTP utilities)
+- Shell scripts (`*.sh`), `Dockerfile`, `release.Dockerfile`
+- Configuration (`*.toml`), deployment assumptions, tests
 
-Never classify a vulnerability as fixed merely because:
+**Explicitly not the objective**
 
-- documentation says it was fixed;
-- a commit message says it was fixed;
-- a TODO was removed;
-- code appears cleaner;
-- a previous audit says it was fixed;
-- a test exists but does not actually exercise the security property.
+- Enterprise compliance frameworks, SBOM, provenance for their own sake.
+- Inflating count or severity because a standard "recommends" a stronger control.
+- Reporting a best practice as a vulnerability without a traced attack path.
 
-A finding is **Verified Fixed** only when the current implementation and appropriate tests/evidence demonstrate that the security property holds.
-
-Use these statuses:
-
-| Status | Meaning |
-|---|---|
-| `CONFIRMED` | Vulnerability is demonstrated in the current implementation |
-| `LIKELY` | Strong evidence exists but exploitation could not be fully demonstrated |
-| `POTENTIAL` | Security weakness exists but exploitability is uncertain |
-| `NOT_REPRODUCED` | Previous claim could not be reproduced |
-| `FIXED-VERIFIED` | Current implementation + evidence demonstrate the fix |
-| `FIXED-UNVERIFIED` | Code appears fixed but verification is insufficient |
-| `FALSE-POSITIVE` | Finding is not applicable after investigation |
-| `UNKNOWN` | Insufficient evidence |
-
-Never silently convert `UNKNOWN` into `SAFE`.
-
----
-
-# 2. Repository Snapshot
-
-Before making any changes:
-
-1. Record the repository revision/commit.
-2. Record the branch.
-3. Record relevant modified/uncommitted files.
-4. Record the audit date.
-5. Record the tools and test commands used.
-6. Identify the scope of the review.
-7. Do not modify source code during the initial audit pass.
-
-Clearly distinguish:
+Priority of effort:
 
 ```text
-Observed in current source
-        ≠
-Claimed by documentation
-        ≠
-Previously reported
-        ≠
-Verified fixed
+Accuracy  >  Evidence  >  Attack paths  >  Actionability  >  Completeness  >  Standards
 ```
 
-If remediation is requested later, create a separate remediation phase.
+Five findings that explain the real situation beat thirty that do not.
 
 ---
 
-# 3. System Classification
+## 2. 👥 Threat model
 
-Explicitly classify the bot as:
+Always name the attacker before rating a finding. A weakness reachable by an
+anonymous client is far more serious than one requiring maintainer access.
 
-**Privileged Event-Driven DevOps Automation**
-
-Explain why this matters.
-
-Identify the privileged capabilities available to the bot, including where applicable:
-
-- GitHub App credentials
-- GitHub installation tokens
-- GitHub PATs
-- GitLab API tokens
-- repository read/write access
-- pull-request manipulation
-- issue/comment operations
-- CI triggering
-- workflow modification
-- Docker/container execution
-- shell command execution
-- repository cloning/fetching/pushing
-- artifact generation
-- external HTTP requests
-- publishing logs/traces/results
-- credential-backed API operations
-
-Determine which capabilities can be indirectly triggered by untrusted input.
-
----
-
-# 4. Architecture Discovery
-
-Before judging individual vulnerabilities, reconstruct the actual architecture.
-
-Inspect:
-
-- source tree
-- HTTP server
-- webhook handlers
-- authentication code
-- authorization code
-- GitHub integration
-- GitLab integration
-- configuration
-- credential loading
-- subprocess execution
-- Docker execution
-- repository operations
-- CI/workflow logic
-- asynchronous/background jobs
-- deployment manifests
-- shell scripts
-- tests
-- CI configuration
-- documentation
-- dependency configuration
-
-Do not rely on filenames alone.
-
-Trace execution paths from entry point to privileged operation.
-
----
-
-# 5. Required System Diagram
-
-Produce a clear system-context diagram.
-
-Use Mermaid where practical.
-
-Show:
-
-```text
-External actors
-      ↓
-HTTP/Webhook entry points
-      ↓
-Authentication
-      ↓
-Authorization
-      ↓
-Identity/resource binding
-      ↓
-Bot business logic
-      ↓
-GitHub / GitLab / Git / Docker / Shell / HTTP
-      ↓
-Repositories / CI / Artifacts / Published output
-```
-
-Mark trust boundaries explicitly.
-
-Use distinct visual labels for:
-
-- untrusted input
-- authenticated identity
-- privileged credentials
-- repository-controlled data
-- bot-controlled data
-- external services
-- execution environments
-
----
-
-# 6. Data-Flow Diagram
-
-Create a DFD showing:
-
-- external input;
-- authentication material;
-- webhook payloads;
-- repository identifiers;
-- commit SHA values;
-- branch names;
-- URLs;
-- Docker image names;
-- pipeline variables;
-- GitLab traces;
-- GitHub API requests;
-- GitLab API requests;
-- secrets;
-- generated commands;
-- generated workflows;
-- published content.
-
-For every flow identify:
-
-1. source;
-2. destination;
-3. trust level;
-4. validation;
-5. authentication;
-6. authorization;
-7. transformation;
-8. privileged effect.
-
----
-
-# 7. Entry-Point Inventory
-
-Build a complete table.
-
-| Endpoint/Event | Method | Authentication | Authorization | Input | Privileged Effect | Fail Closed? | Replay Protection | Rate/Size Limit |
-|---|---|---|---|---|---|---|---|---|
-
-Include:
-
-- GitHub webhooks;
-- GitLab webhooks;
-- scheduled endpoints;
-- minimization endpoints;
-- CI endpoints;
-- resume/retry endpoints;
-- health/debug endpoints;
-- internal callbacks;
-- command/API endpoints;
-- any aliases.
-
-Do not assume an endpoint is internal merely because its name suggests it is.
-
----
-
-# 8. Authentication Audit
-
-For every entry point determine:
-
-### Required properties
-
-- Is authentication mandatory?
-- Is absence of credentials rejected?
-- Is malformed authentication rejected?
-- Is invalid authentication rejected?
-- Is verification performed before expensive work?
-- Is verification performed before parsing attacker-controlled fields that influence security decisions?
-- Is the correct cryptographic algorithm used?
-- Is comparison constant-time where appropriate?
-- Is the secret scoped to the correct integration/project?
-- Can authentication silently fail open?
-- Can exceptions bypass verification?
-- Can headers be duplicated or ambiguously parsed?
-
-For GitHub webhooks:
-
-- prefer `X-Hub-Signature-256`;
-- verify the raw request body;
-- reject missing signatures;
-- reject malformed signatures;
-- reject invalid signatures;
-- do not allow parsing failures to bypass verification.
-
-For GitLab:
-
-- reject missing webhook secrets;
-- reject invalid secrets;
-- ensure every relevant integration has explicit secret configuration;
-- do not rely on a boolean such as `signed=true/false` unless it is enforced centrally.
-
----
-
-# 9. Authorization Audit
-
-Authentication is not authorization.
-
-For every privileged operation determine:
-
-```text
-Who is calling?
-        ↓
-How was identity established?
-        ↓
-Is this identity authorized?
-        ↓
-For which repository/project?
-        ↓
-For which installation/account?
-        ↓
-For which operation?
-        ↓
-With which parameters?
-```
-
-Check:
-
-- contributor/team membership;
-- repository permissions;
-- project permissions;
-- installation ownership;
-- event actor identity;
-- pull-request author identity;
-- organization membership;
-- bot/admin privileges.
-
-Pay special attention to cases where:
-
-```text
-event actor ≠ PR author
-```
-
-and where:
-
-```text
-caller-supplied installation/repository/account
-```
-
-selects a privileged credential.
-
----
-
-# 10. Identity / Resource Binding
-
-Treat this as a first-class security control.
-
-Identify every privileged resource:
-
-- GitHub installation;
-- GitHub repository;
-- GitLab project;
-- GitLab instance;
-- token;
-- Docker image;
-- workflow;
-- branch;
-- target repository;
-- external URL.
-
-For each determine whether the caller can influence the resource independently of the authenticated identity.
-
-Look specifically for confused-deputy patterns:
-
-```text
-Attacker
-  ↓
-authenticated request
-  ↓
-attacker supplies resource ID
-  ↓
-bot selects privileged credential
-  ↓
-bot performs operation
-```
-
-A secure design should instead establish:
-
-```text
-authenticated identity
-        ↓
-authorized resource
-        ↓
-privileged credential
-```
-
-Do not trust caller-supplied identity/resource fields simply because the caller passed webhook authentication.
-
----
-
-# 11. Command Execution Audit — P0
-
-Perform an exhaustive audit of:
-
-- `Sys.command`;
-- `Unix.open_process*`;
-- shell invocation;
-- `/bin/sh`;
-- `/bin/bash`;
-- `docker`;
-- `git`;
-- `curl`;
-- `wget`;
-- dynamically constructed shell strings;
-- shell scripts;
-- command wrappers;
-- subprocess helpers.
-
-Search for:
-
-```text
-"$variable"
-"$value"
-sprintf(...)
-Printf.sprintf(...)
-String.concat(...)
-```
-
-being passed into shell commands.
-
-Trace all attacker-controlled values into command execution, including:
-
-- branch names;
-- repository names;
-- URLs;
-- commit SHAs;
-- PR titles;
-- usernames;
-- GitHub/GitLab fields;
-- pipeline variables;
-- Docker image names;
-- file paths;
-- patterns;
-- comments;
-- webhook payload fields.
-
-### Required security invariant
-
-> **No attacker-controlled value may be interpolated into a shell command.**
-
-Prefer:
-
-```text
-argv vector
-+
-explicit executable
-+
-validated arguments
-```
-
-over:
-
-```text
-shell string
-```
-
----
-
-# 12. Command-Injection Verification
-
-For every potentially dangerous execution path, test security boundaries using harmless proof-of-concept values.
-
-Examples:
-
-```text
-';id
-";id
-$(id)
-`id`
-&& id
-|| id
-; id
-\n id
-```
-
-Also test special characters in:
-
-- branch names;
-- commit SHAs;
-- URLs;
-- repository names;
-- patterns;
-- Docker image names.
-
-Do not stop after testing one injection point.
-
-Trace the complete data path:
-
-```text
-HTTP/webhook
- → parser
- → validation
- → business logic
- → command builder
- → subprocess
-```
-
----
-
-# 13. Git / Repository Security
-
-Audit all Git operations:
-
-- clone;
-- fetch;
-- checkout;
-- push;
-- branch creation/deletion;
-- remote configuration;
-- credentials;
-- URLs;
-- refspecs;
-- SHA handling;
-- repository paths.
-
-Verify:
-
-- commit SHA values are strictly validated;
-- branch names cannot become options;
-- repository URLs cannot inject commands;
-- credentials do not appear in command arguments;
-- credentials do not appear in URLs;
-- credentials do not appear in logs;
-- remote URLs are controlled;
-- pushes target the intended repository;
-- attacker-controlled repository metadata cannot redirect privileged operations.
-
----
-
-# 14. Docker / Container Security
-
-Where Docker or container execution is used, determine:
-
-- who controls the image;
-- who selects the image;
-- whether an attacker can supply the image;
-- whether mutable tags are accepted;
-- whether image digests are supported;
-- whether privileged containers are possible;
-- mounted directories;
-- mounted credentials;
-- Docker socket access;
-- network access;
-- host filesystem exposure;
-- environment-variable exposure.
-
-Special attention:
-
-> An attacker-controlled Docker image is potentially equivalent to attacker-controlled code execution.
-
-Determine whether an attacker can cause the bot to pull and execute an arbitrary image.
-
----
-
-# 15. CI/CD and Workflow Integrity
-
-Audit:
-
-- workflow generation;
-- workflow modification;
-- pipeline variables;
-- CI configuration;
-- branch selection;
-- target selection;
-- Docker image selection;
-- artifact publishing;
-- CI triggering;
-- reruns;
-- resume operations.
-
-Determine whether attacker-controlled input can:
-
-- modify workflow YAML;
-- inject workflow expressions;
-- alter commands;
-- choose privileged branches;
-- choose privileged repositories;
-- choose privileged images;
-- inject environment variables;
-- redirect artifacts;
-- trigger privileged CI jobs.
-
-Separate:
-
-```text
-trusted repository-controlled configuration
-```
-
-from:
-
-```text
-attacker-controlled event data
-```
-
-Do not allow the latter to silently become the former.
-
----
-
-# 16. Webhook Security
-
-For every webhook:
-
-1. verify signature;
-2. verify event type;
-3. validate payload structure;
-4. establish actor identity;
-5. establish repository/project identity;
-6. authorize the action;
-7. validate security-sensitive fields;
-8. enforce replay protection;
-9. enforce size limits;
-10. enforce resource limits.
-
-Audit:
-
-- missing signature;
-- wrong signature;
-- malformed signature;
-- duplicate delivery;
-- replayed delivery;
-- stale delivery;
-- duplicate event;
-- conflicting event metadata;
-- actor/repository mismatch.
-
-Use GitHub delivery identifiers where available for replay detection.
-
----
-
-# 17. SSRF Audit
-
-Trace every attacker-controlled URL.
-
-Identify:
-
-- HTTP clients;
-- redirects;
-- DNS resolution;
-- proxies;
-- custom headers;
-- URL parsers;
-- Git remote URLs;
-- GitLab instance URLs;
-- callback URLs.
-
-Protect against:
-
-- localhost;
-- loopback;
-- private networks;
-- link-local addresses;
-- cloud metadata services;
-- internal DNS;
-- IPv6 equivalents;
-- DNS rebinding;
-- redirect-based bypasses.
-
-Enforce destination policy:
-
-```text
-URL
- ↓
-parse
- ↓
-resolve
- ↓
-validate destination
- ↓
-connect
- ↓
-revalidate redirect destination
-```
-
-Do not rely solely on hostname string matching.
-
----
-
-# 18. Secret and Credential Security
-
-Inventory every credential:
-
-| Credential | Provider | Scope | Lifetime | Storage | Exposure Risk | Rotation |
-|---|---|---|---|---|---|---|
-
-Check:
-
-- GitHub App private key;
-- GitHub PAT;
-- GitHub installation tokens;
-- GitLab tokens;
-- webhook secrets;
-- schedule secrets;
-- CI credentials;
-- Docker credentials;
-- environment variables.
-
-Verify:
-
-- least privilege;
-- short lifetime where possible;
-- no secrets in repository;
-- no secrets in command-line arguments;
-- no secrets in URLs;
-- no secrets in logs;
-- no secrets in generated artifacts;
-- no secrets in published traces;
-- appropriate filesystem permissions;
-- credential rotation procedure.
-
-Prefer short-lived GitHub App installation tokens over long-lived PATs where architecture permits.
-
----
-
-# 19. Secret Exposure / Exfiltration
-
-Search for credentials flowing into:
-
-```text
-argv
-URLs
-logs
-exceptions
-Git traces
-GitLab traces
-GitHub comments
-PR comments
-CI artifacts
-Docker environment
-generated files
-published reports
-```
-
-Pay particular attention to token-backed build traces.
-
-Determine whether secrets could be published to a public repository, issue, PR, or external service.
-
----
-
-# 20. JSON / Serialization Security
-
-Do not construct security-sensitive JSON by string concatenation.
-
-Audit:
-
-- GitHub API payloads;
-- GitLab API payloads;
-- workflow JSON;
-- CI variables;
-- external API requests.
-
-Prefer structured encoders such as the project's JSON library.
-
-Validate:
-
-- strings;
-- numbers;
-- booleans;
-- arrays;
-- objects;
-- URLs;
-- commit SHAs;
-- identifiers.
-
----
-
-# 21. Resource Exhaustion / Abuse Resistance
-
-For every public endpoint determine:
-
-- body-size limit;
-- request timeout;
-- connection timeout;
-- response limit;
-- queue limit;
-- concurrency limit;
-- subprocess limit;
-- Docker execution limit;
-- API retry limit;
-- installation-token minting limit;
-- GitHub/GitLab API rate limiting;
-- replay handling.
-
-Look for unauthenticated paths capable of causing expensive work.
-
-Security property:
-
-> Authentication and cheap validation should occur before expensive privileged work whenever possible.
-
----
-
-# 22. Error Handling
-
-Audit:
-
-- `failwith`;
-- uncaught exceptions;
-- unsafe parsers;
-- stack traces;
-- raw API responses;
-- credential-bearing error messages;
-- HTTP status handling.
-
-Verify external failures cannot:
-
-- bypass authorization;
-- bypass authentication;
-- leave partially completed privileged actions;
-- expose credentials;
-- cause fail-open behavior.
-
-Prefer explicit error/result handling for security-sensitive operations.
-
----
-
-# 23. Outbound API Security
-
-For GitHub and GitLab API calls determine:
-
-- credential used;
-- scope;
-- resource being accessed;
-- authorization relationship;
-- HTTP method;
-- status-code validation;
-- retries;
-- timeout;
-- response size;
-- redirect behavior.
-
-Never assume an HTTP request succeeded merely because a response was returned.
-
----
-
-# 24. Supply-Chain Security
-
-Treat supply-chain security as **first-class**, but keep standards proportional to the actual repository.
-
-Audit:
-
-- dependencies;
-- GitHub Actions;
-- GitLab CI;
-- Docker images;
-- build inputs;
-- generated workflows;
-- release artifacts;
-- artifact publishing;
-- mutable tags;
-- third-party scripts;
-- external downloads.
-
-Where applicable evaluate:
-
-- dependency pinning;
-- SBOM;
-- provenance;
-- artifact signing;
-- trusted build environments;
-- SLSA-relevant controls;
-- OpenSSF Scorecard.
-
-Do not claim SLSA/compliance merely because a control is desirable.
-
-Map only standards that are genuinely applicable.
-
----
-
-# 25. Security Standards Mapping
-
-Use standards as **reference frameworks**, not as a checkbox exercise.
-
-Where relevant map findings to:
-
-- OWASP ASVS 5.x;
-- OWASP API Security Top 10;
-- CWE;
-- CVSS 4.0;
-- NIST SSDF;
-- OpenSSF Scorecard;
-- SLSA.
-
-For each mapping explain:
-
-```text
-Finding
- → security property
- → relevant standard
- → evidence
-```
-
-Do not invent compliance claims.
-
----
-
-# 26. Threat Model
-
-Identify:
-
-### External attackers
-
-- anonymous internet users;
-- malicious webhook senders;
-- compromised GitHub/GitLab accounts;
-- malicious repository contributors;
-- malicious PR authors;
-- malicious maintainers;
-- compromised dependencies;
-- malicious CI contributors.
-
-### Trusted-but-dangerous inputs
-
-- repository metadata;
-- branch names;
-- commit messages;
-- PR titles;
-- CI variables;
-- GitLab job output;
-- repository configuration.
-
-### High-value assets
-
-- GitHub App private key;
-- GitHub PAT;
-- GitHub installation tokens;
-- GitLab tokens;
-- repositories;
-- CI infrastructure;
-- Docker host;
-- workflow definitions;
-- published artifacts;
-- bot identity.
-
----
-
-# 27. Attack-Path Analysis
-
-Construct concrete attack chains.
-
-At minimum investigate:
-
-### Attack Path A — Webhook authentication bypass
-
-```text
-Internet
- → webhook
- → missing/invalid authentication
- → privileged handler
- → privileged operation
-```
-
-### Attack Path B — Command injection
-
-```text
-Attacker-controlled field
- → parser
- → command construction
- → shell
- → bot host execution
-```
-
-### Attack Path C — Confused deputy
-
-```text
-Attacker
- → authenticated request
- → attacker-controlled resource identifier
- → privileged credential selection
- → privileged API operation
-```
-
-### Attack Path D — CI/supply-chain compromise
-
-```text
-Attacker-controlled input
- → workflow/image/configuration
- → privileged CI
- → credential-bearing environment
- → repository/artifact compromise
-```
-
-### Attack Path E — SSRF
-
-```text
-Attacker-controlled URL
- → bot HTTP client
- → internal destination
- → privileged/internal service
-```
-
-### Attack Path F — Credential exfiltration
-
-```text
-Secret
- → command/API/trace/log/artifact
- → attacker-visible location
-```
-
-For every path determine:
-
-- prerequisites;
-- exploitability;
-- impact;
-- evidence;
-- mitigation;
-- regression test.
-
----
-
-# 28. Security Invariants
-
-Define explicit invariants that must remain true.
-
-At minimum:
-
-```text
-I1. Every privileged external entry point authenticates and fails closed.
-
-I2. Authentication does not imply authorization.
-
-I3. Every privileged operation authorizes the authenticated actor.
-
-I4. Privileged credentials are never selected solely from caller-controlled identifiers.
-
-I5. No attacker-controlled value is interpolated into a shell command.
-
-I6. Repository, project, installation, and identity relationships are explicitly validated.
-
-I7. Webhook signatures are verified before privileged processing.
-
-I8. Missing authentication material is an error.
-
-I9. Secrets never appear in argv, URLs, logs, traces, or public output.
-
-I10. Attacker-controlled URLs cannot reach restricted network destinations.
-
-I11. Attacker-controlled input cannot arbitrarily modify trusted CI/workflow configuration.
-
-I12. Security-sensitive failures fail closed.
-
-I13. Expensive privileged work is protected against unauthenticated abuse.
-
-I14. Security fixes have regression tests.
-
-I15. Security documentation reflects verified implementation state.
-```
-
----
-
-# 29. Risk Classification
-
-Use:
-
-### P0 — Critical / Stop-Ship
-
-Examples:
-
-- RCE;
-- authentication bypass;
-- authorization bypass;
-- credential theft;
-- arbitrary privileged repository modification;
-- arbitrary privileged workflow execution;
-- arbitrary trusted Docker image execution;
-- exploitable privileged SSRF;
-- major confused-deputy vulnerability.
-
-### P1 — High
-
-Examples:
-
-- significant privilege escalation;
-- sensitive information disclosure;
-- meaningful resource exhaustion;
-- weak resource authorization;
-- replay enabling privileged actions;
-- significant CI integrity weakness.
-
-### P2 — Medium
-
-Examples:
-
-- defense-in-depth weaknesses;
-- insufficient validation;
-- weak error handling;
-- incomplete rate limiting;
-- non-critical secret handling weaknesses.
-
-### P3 — Low
-
-Examples:
-
-- hardening opportunities;
-- documentation gaps;
-- maintainability improvements with limited security impact.
-
----
-
-# 30. Stop-Ship Rules
-
-The bot must **not** be described as production-secure while any exploitable P0 condition remains.
-
-In particular:
-
-```text
-Critical/RCE                     → STOP
-Authentication bypass            → STOP
-Authorization bypass             → STOP
-Command injection                → STOP
-Credential exposure              → STOP
-Arbitrary workflow modification  → STOP
-Arbitrary privileged image       → STOP
-Meaningful privileged SSRF       → STOP
-Major confused deputy             → STOP
-```
-
-Do not downgrade a vulnerability merely because exploitation requires a GitHub/GitLab account unless that account requirement is itself a strong authorization boundary.
-
----
-
-# 31. Regression Test Requirements
-
-For every confirmed or high-confidence vulnerability, create a regression test.
-
-At minimum test:
-
-### Authentication
-
-- missing GitHub signature;
-- invalid GitHub signature;
-- invalid SHA-256 signature;
-- missing GitLab token;
-- invalid GitLab token;
-- missing minimizer secret;
-- wrong minimizer secret.
-
-### Injection
-
-- `';id`;
-- `$(id)`;
-- backticks;
-- `&&`;
-- `||`;
-- newline injection;
-- special repository URL;
-- special branch;
-- invalid SHA;
-- special pattern;
-- malicious Docker image identifier.
-
-Tests must prove that attacker-controlled data remains data.
-
----
-
-# 32. Negative Security Tests
-
-Explicitly include tests proving rejection.
-
-Examples:
-
-```text
-missing authentication → 401/403
-invalid authentication → 401/403
-unauthorized actor → rejected
-unauthorized repository → rejected
-unknown installation → rejected
-invalid SHA → rejected
-private SSRF destination → rejected
-metadata IP → rejected
-oversized body → rejected
-replayed webhook → rejected
-malicious shell input → treated as literal data
-```
-
-Do not test only successful paths.
-
----
-
-# 33. Documentation Architecture
-
-Generate documentation that is easy to understand visually.
-
-Use the following structure:
-
-```text
-docs/security/
-├── README.md
-├── architecture.md
-├── threat-model.md
-├── data-flow.md
-├── authentication.md
-├── authorization.md
-├── credentials.md
-├── command-execution.md
-├── webhook-security.md
-├── ci-cd-security.md
-├── supply-chain.md
-├── findings.md
-├── remediation.md
-├── verification.md
-└── incident-response.md
-```
-
-If the repository maintainers prefer a single `security.md`, preserve that file but organize it into equivalent sections.
-
-Do not create unnecessary documents solely to increase document count.
-
----
-
-# 34. Required Visuals
-
-Use diagrams only when they clarify security architecture.
-
-Required:
-
-### 1. System Context
-
-Who communicates with the bot?
-
-### 2. Trust Boundary
-
-Where does trust change?
-
-### 3. Data Flow
-
-How does untrusted data reach privileged operations?
-
-### 4. Credential Flow
-
-Where are credentials created, stored, used, and exposed?
-
-### 5. Authentication / Authorization Flow
-
-```text
-Request
- ↓
-Authenticate
- ↓
-Identify actor
- ↓
-Authorize actor
- ↓
-Authorize resource
- ↓
-Validate parameters
- ↓
-Perform privileged operation
-```
-
-### 6. Attack Flow
-
-Show the most important confirmed vulnerabilities.
-
-### 7. Remediated Architecture
-
-Show how the corrected architecture differs from the vulnerable one.
-
----
-
-# 35. Documentation Icon Vocabulary
-
-Use a consistent icon vocabulary.
-
-```text
-👤 Human actor
-🤖 Bot
-🌐 Internet
-🔐 Authentication
-🛡️ Authorization
-🔑 Secret/Credential
-📦 Repository
-⚙️ CI/CD
-🐳 Container
-💻 Host execution
-💾 Data store
-🔗 External service
-⚠️ Risk
-🚨 Critical finding
-✅ Verified control
-❌ Failed control
-🧪 Security test
-```
-
-Do not use icons as decoration where they obscure meaning.
-
----
-
-# 36. Security Control Matrix
-
-Create:
-
-| Control | Security Property | Implementation | Evidence | Test | Status | Risk if Missing |
-|---|---|---|---|---|---|---|
-
-Example:
-
-| Control | Security Property | Status |
+| Icon | Attacker | Capability |
 |---|---|---|
-| GitHub signature verification | Webhook authenticity | Verified / Failed |
-| GitLab secret validation | Webhook authenticity | Verified / Failed |
-| Actor authorization | Privilege control | Verified / Failed |
-| Shell-free subprocess execution | Command injection prevention | Verified / Failed |
-| Resource binding | Confused-deputy prevention | Verified / Failed |
-| SSRF destination policy | Network isolation | Verified / Failed |
+| 🌐 | Anonymous Internet | Send arbitrary HTTP requests to the bot |
+| 👤 | GitHub/GitLab user | Ordinary account; can comment, open issues/PRs |
+| 🔀 | Fork/PR contributor | Can submit repository changes from a fork |
+| 👥 | Project contributor | Team membership / write on some repo |
+| 🛠️ | Maintainer | Elevated repository permissions |
+| 🔑 | Secret holder | Knows a webhook/callback/schedule secret |
+| 💻 | Compromised external service | Controls a callback or event source |
+| ⚙️ | Compromised CI workload | Executes code inside a CI context |
 
 ---
 
-# 37. Finding Template
+## 3. 🧱 Trust boundaries
 
-Every finding must contain:
+**Untrusted by default** (attacker-controlled until proven otherwise): HTTP bodies,
+query params, headers, webhook payloads *before* verification, PR titles, issue and
+comment bodies, branch/repo names, repo URLs, commit SHAs, git refs, file names,
+diff contents, Docker image names/tags, CI variables, callback parameters, external
+URLs, GitLab project identifiers, GitHub repository identifiers.
 
-```text
-ID
-Title
-Severity
-Status
-Affected component
-Affected function/file
-Attack surface
-Security property violated
-Threat actor
-Preconditions
-Technical explanation
-Attack path
-Evidence
-Reproduction
-Impact
-Likelihood
-CVSS 4.0
-CWE
-Relevant OWASP/standard mapping
-Recommended remediation
-Regression test
-Verification evidence
-Residual risk
+**Trusted only with a concrete reason**: a verified webhook identity, server-side
+configuration, a validated GitHub installation identity, a validated GitLab mapping,
+bot-created job state, allowlisted resources.
+
+Never trust data merely because it is JSON, came from GitHub/GitLab, parsed
+successfully, or was produced by another component. A PR from a fork is a critical
+trust boundary.
+
+---
+
+## 4. 🧭 Methodology
+
+Understand how the bot works first; do not open with a generic OWASP sweep.
+
+```mermaid
+flowchart TB
+    d["1. Discover system"]
+    e["2. Map entry points"]
+    t["3. Map trust boundaries"]
+    s["4. Trace privileged sinks"]
+    i["5. Test security invariants"]
+    x["6. Confirm exploit paths"]
+    r["7. Group root causes"]
+    f["8. Recommend + verify fixes"]
+    v["9. Final verdict"]
+
+    d --> e --> t --> s --> i --> x --> r --> f --> v
+
+    classDef start fill:#eceff1,stroke:#546e7a,color:#263238
+    classDef domain fill:#c8e6c9,stroke:#2e7d32,color:#1b5e20
+    classDef shared fill:#e1bee7,stroke:#7b1fa2,color:#4a148c
+
+    class d,e,t start
+    class s,i,x domain
+    class r,f,v shared
 ```
 
-Do not inflate severity without evidence.
+Reason in this order for every request: **authentication** (do we know who is
+calling?) -> **authorization** (are they allowed to do this?) -> **resource binding**
+(is this the repo/project/job they may affect?) -> **privileged operation**. A
+failure at an earlier stage invalidates every later stage.
 
 ---
 
-# 38. Before / After Analysis
+## 5. 🗺️ Repository map (audit these first)
 
-For every major vulnerability provide:
+### Entry points
 
-```text
-BEFORE
+| Entry point | Route(s) in `src/bot.ml` | Handler | Authentication |
+|---|---|---|---|
+| GitHub webhook | `/github`, `/push`, `/pull_request` | `src/webhooks/github.ml` | HMAC in `bot-components/github/GitHub_subscriptions.ml` |
+| GitLab webhook | `/gitlab`, `/job`, `/pipeline` | `src/webhooks/gitlab.ml` | Token in `bot-components/gitlab/GitLab_subscriptions.ml` |
+| Minimizer callbacks | `/coq-bug-minimizer`, `/ci-minimization`, `/resume-ci-minimization` | `src/webhooks/minimizer.ml` -> `src/ci/minimization.ml` | Verify this - it is the highest-risk surface |
+| Scheduler | `/check-stale-pr` | `src/webhooks/scheduled.ml` | Shared secret in body |
 
-Untrusted input
-      ↓
-Weak/missing control
-      ↓
-Privileged operation
+Build the real table from `src/bot.ml`; do not invent endpoints.
 
+### Privileged sinks
 
-AFTER
+| Sink | Location | Danger |
+|---|---|---|
+| Shell execution | `bot-components/utils/Git_utils.ml` (`execute_cmd` -> `Lwt_process.shell`), `Lwt_unix.system` | 💻 host command execution |
+| Git command strings | `Git_utils.ml`, `src/ci/minimization.ml` | 💻 injection, credential-in-URL |
+| Minimizer scripts | `coq_bug_minimizer.sh`, `run_ci_minimization.sh`, `make_ancestor.sh` | ⚙️ CI/workflow injection, 🐳 image control |
+| Installation tokens | `bot-components/github/GitHub_installations.ml` (`action_as_github_app ~owner`) | 🔑 confused deputy across orgs |
+| GitHub/GitLab writes | `*_mutations.ml` | privileged repo/CI mutation |
+| Outbound HTTP | `bot-components/utils/HTTP_utils.ml` (`client_get`, `download`, `fetch_artifact`) | 🌐 SSRF |
+| Credentials | `bot-components/core/Bot_info.ml`, `src/config/config.ml` | 🔑 exposure in argv/URL/logs |
 
-Untrusted input
-      ↓
-Authentication
-      ↓
-Authorization
-      ↓
-Resource binding
-      ↓
-Validation
-      ↓
-Safe execution
-      ↓
-Privileged operation
+For every sink, answer: **who can cause this operation?**
+
+---
+
+## 6. ✅ Per-area checklists
+
+Trace the complete path from input to sink; do not stop at the first function.
+
+**🔐 Authentication (every public route)**
+- Missing, malformed, and invalid credentials are all rejected.
+- Verification runs *before* any privileged processing.
+- A parsing exception cannot skip verification (fail closed, not `Ok None`).
+- A returned auth Boolean is actually enforced by the caller.
+- Auth is bound to the correct integration and cannot be confused with authorization.
+
+**🪝 GitHub webhook** - `X-Hub-Signature(-256)`, raw body, HMAC, secret retrieval,
+installation identity, event/action/actor. Flag: installation parsed before auth;
+auth inside a `try`; exceptions returning `None`; missing metadata skipping the
+signature; a signature Boolean ignored; processing continuing after failure.
+
+**🪝 GitLab webhook** - missing/wrong `X-Gitlab-Token` must both reject. The result
+must not be ignored by the caller. Prefer error-returning auth over a Boolean.
+
+**📞 Callback security** - who calls it, why they are trusted, how it authenticates,
+which job/repo/branch it refers to. Do not trust callback-supplied owner, repo,
+branch, installation, project, job, or destination without validating against
+server-side state. Preferred: opaque job id -> authenticate -> look up stored state.
+
+**👤 Authorization** - authentication ("who are you?") never substitutes for
+authorization ("are you allowed?"). For each privileged command confirm an explicit
+permission check (e.g. team membership) on the *acting* identity.
+
+**🎯 Resource binding** - the server, not the attacker, must decide the repo/project/
+installation a privileged credential operates on. Attacker-chosen resource + bot
+credential = confused deputy.
+
+**💻 Shell / Git** - no attacker- or repo-controlled value reaches a shell parser
+through interpolation. Prefer `executable + argv[]` (`Filename.quote_command`) over
+concatenated command strings. Check refs, names, URLs, paths, SHAs, refspecs,
+patterns, Docker images, CI variables. Watch option injection (values beginning
+with `-`) even when shell-quoted.
+
+**🔑 Credentials** - never in URLs, argv, logs, comments, traces, or artifacts.
+Command logging must sanitize deliberately, not rely on per-call memory.
+
+**⚙️ CI / 🐳 Docker** - treat CI as privileged execution. Determine who controls the
+image, whether the registry is allowlisted, whether a digest is pinned, whether
+secrets/write-credentials enter the container, and whether untrusted input becomes
+trusted workflow configuration. An attacker-controlled image is attacker-controlled
+code; severity is the privilege that container receives.
+
+**🌐 SSRF** - trace externally influenced URLs through validation, client, redirect
+handling, destination. Check schemes, localhost/loopback/private ranges, cloud
+metadata, arbitrary GitLab instances, redirect credential forwarding.
+
+**🧨 DoS / replay** - unbounded bodies/responses, expensive parsing, subprocess or
+Docker spawning, unbounded retries. For authenticated callbacks, assess whether
+replay of a non-idempotent privileged action causes harm.
+
+**🧯 Error handling** - security-sensitive failures must fail closed. An exception
+must never turn a rejection into "continue".
+
+---
+
+## 7. 📊 Severity model
+
+Severity = exploitability x privilege gained x reachability x deployment
+assumptions - not the worst imaginable impact.
+
+| Sev | When |
+|---|---|
+| 🔴 **P0** | Realistic attacker gets RCE, auth/authz bypass, credential theft, arbitrary privileged repo/CI/Docker execution, or major confused-deputy behavior. |
+| 🟠 **P1** | Significant privilege escalation, serious data disclosure, unauthorized CI manipulation, serious resource-selection bypass, serious credential exposure, replay of meaningful privileged operations. |
+| 🟡 **P2** | Defense-in-depth gaps, limited SSRF, moderate DoS, weak secret separation, incomplete validation, unsafe error handling with limited impact. |
+| 🟢 **P3** | Documentation, maintainability, minor hardening, standards, negligible-impact theoretical issues. |
+
+Standards (CWE, OWASP, CVSS, SLSA) are supporting references only. Do not force a
+CVSS number onto every finding.
+
+---
+
+## 8. 🔎 Evidence and confidence
+
+Every finding cites `file:line` and quotes the deciding expression, and carries one
+confidence label:
+
+| Label | Meaning |
+|---|---|
+| 🔴 `CONFIRMED` | Demonstrated in current code |
+| 🟠 `LIKELY` | Strong evidence, exploitation not fully demonstrated |
+| 🟡 `POTENTIAL` | Weakness exists; impact depends on assumptions |
+| ⚪ `NOT-REPRODUCED` | Claimed issue could not be reproduced |
+| 🟢 `FIXED-VERIFIED` / `FIXED-UNVERIFIED` | Fix confirmed / apparently present |
+| ❌ `FALSE-POSITIVE` | Not actually a vulnerability |
+| ❓ `UNKNOWN` | Insufficient evidence (never upgrade to "safe") |
+
+A test does not prove a security property until you read what it actually asserts.
+
+---
+
+## 9. 🧾 Canonical finding template
+
+Use exactly this shape for every finding:
+
+```markdown
+## 🔴 P0-01 - Short title
+
+> **Status:** 🔴 CONFIRMED  ·  **Risk:** 🔴 P0  ·  **Attacker:** 🌐 Anonymous
+>
+> **Affected:** `src/file.ml:123`  ·  **Boundary:** HTTP request -> privileged sink
+
+### 💥 Impact
+What the attacker can actually do (one or two paragraphs).
+
+### 🎯 Attack path
+(Mermaid flowchart: attacker -> boundary -> input -> sink -> impact.)
+
+### 🔬 Evidence
+Cite file:line and quote the deciding expression; explain the data flow.
+
+### 🧩 Root cause
+The underlying design/implementation mistake.
+
+### 🛠️ Fix
+The smallest robust fix that removes the vulnerability class.
+
+### 🧪 Regression test
+A test that fails before the fix and passes after.
+
+### ⚠️ Residual risk
+What remains after the fix.
 ```
 
-Explain the security property that changed.
+Draw a **Mermaid flowchart for every finding that maps to a flow**
+(attacker -> trust boundary -> privileged sink -> impact). Use sequence diagrams for
+chains where request/response ordering matters.
 
 ---
 
-# 39. Remediation Strategy
+## 10. 📄 Output contract - `docs/security-audit.md`
 
-Prioritize architecture-level fixes.
-
-Prefer:
+Write the audit to **`docs/security-audit.md`** (a new file). Do **not** modify
+`docs/security.md`. Use emoji/icon markers, Markdown tables, styled Mermaid, and
+shields.io badges. Required section order:
 
 ```text
-Remove dangerous primitive
+ 1. 🔐 Title + audit metadata (repo, revision, branch, date, method)
+ 2. 🚦 Executive dashboard + per-category status table + verdict + score
+ 3. 📊 Vulnerability summary table (ID, risk, status, title, attacker, impact, fix)
+ 4. 🗺️ Attack-surface table
+ 5. 🧱 Trust-boundary diagram (Mermaid)
+ 6. 💥 Most dangerous attack paths (ranked, Mermaid)
+ 7. 🧩 Root-cause map
+ 8. 🔴 P0 findings
+ 9. 🟠 P1 findings
+10. 🟡 P2 findings
+11. 🟢 P3 findings
+12. 🧪 Regression-test matrix
+13. 🛠️ Remediation plan (Phase 0 P0 -> Phase 3 P3)
+14. ⚠️ Residual risk
+15. 📋 Security invariants (I1..I12) with pass/fail
+16. 📝 Methodology notes
+17. ✅ Final verdict (exactly one)
 ```
 
-over:
+All dashboard numbers must be derived from actual findings - never invented. A score
+may be given (0-10, whole numbers) but never replaces the verdict, and must be
+accompanied by "Why / What prevents a higher score / What must change".
+
+---
+
+## 11. 🧠 Discipline
+
+**False-positive gate.** Do not report merely because a dependency is old, an action
+is unpinned, a value came from GitHub, a request is unauthenticated, an exception
+exists, a standard prefers a stronger setting, a secret is in memory, or a mutable
+tag exists. First establish attacker -> input -> boundary -> sink -> impact.
+
+**Root-cause grouping.** Report a shared root cause once and list affected paths
+(for example, one "unsafe shell command construction" root cause covering several
+git calls). Create separate findings only when the trust boundary, exploit path,
+remediation, or impact genuinely differs.
+
+**Variant hunting.** When one instance is found, grep the whole tree for the same
+pattern (all subprocess APIs; every webhook/callback for the same fail-open shape).
+
+**Intentional-risk discipline.** Some untrusted-code execution (e.g. running a
+contributor's minimizer script in CI) may be deliberate. The vulnerability is the
+*missing security boundary* (isolation, secrets, write scope, host access, trusted
+artifacts), not the mere existence of untrusted execution.
+
+**Deployment-aware analysis.** State the required configuration/service/credential/
+feature/network for any deployment-dependent finding. Do not assume unavailable
+infrastructure; do not dismiss configured infrastructure.
+
+**Vulnerability vs security debt.** A realistic attack path is a vulnerability; a
+fragile-but-currently-unreachable weakness is debt. Do not mix them.
+
+**Preferred remediations.** Replace shell strings with argv; return `Error` on auth
+failure instead of a Boolean callers can ignore; bind callbacks to server-side job
+state; allowlist Docker registries; sanitize command logging in one deliberate layer.
+
+---
+
+## 12. ✅ Final verdict
+
+End with exactly one:
+
+- 🔴 **NOT SAFE** - critical vulnerabilities remain.
+- 🟠 **NOT SAFE UNTIL P0 FIXES ARE APPLIED** - architecture salvageable; wait to deploy.
+- 🟡 **REASONABLY SECURE WITH RESIDUAL RISKS** - no known P0; P1/P2 documented.
+- 🟢 **SECURE ENOUGH FOR INTENDED USE** - important trust boundaries adequately protected.
+
+Avoid vague language such as "security could be improved."
+
+---
+
+## 13. 🧪 Auditor self-check
+
+Before finalizing, confirm you: understood the real workflow; inspected every public
+entry point; identified privileged sinks and trust boundaries; checked missing/
+invalid/exception auth and that it is enforced; distinguished authentication from
+authorization and traced confused-deputy paths; searched all subprocess APIs and
+traced attacker values into them; inventoried credentials in URLs/argv/logs/CI/
+artifacts; identified who controls CI images and secrets; traced attacker-controlled
+URLs and redirects; grouped root causes and hunted variants; supplied regression
+tests; verified any claimed fix at the class level; and avoided enterprise-only or
+inflated theoretical findings.
+
+---
+
+## 14. 🎨 Mermaid style
+
+Follow `vitamin-workbench/docs/style/mermaid.md`. Embed the `classDef` palette inline
+in every flowchart so it renders outside MkDocs; use the sequence-diagram `init`
+block when a sequence diagram is expected to render standalone.
+
+| Class | Fill | Stroke | Text |
+|---|---|---|---|
+| `ui` | `#cfe2f3` | `#1565c0` | `#0d47a1` |
+| `wiring` | `#b2dfdb` | `#00796b` | `#004d40` |
+| `domain` | `#c8e6c9` | `#2e7d32` | `#1b5e20` |
+| `shared` | `#e1bee7` | `#7b1fa2` | `#4a148c` |
+| `transport` | `#ffe0b2` | `#ef6c00` | `#e65100` |
+| `question` | `#fff9c4` | `#f9a825` | `#5d4037` |
+| `start` | `#eceff1` | `#546e7a` | `#263238` |
+
+Suggested mapping for attack-path flowcharts: attacker = `start`, HTTP boundary =
+`transport`, missing control = `question`, privileged sink = `shared`, impact =
+`domain`.
+
+```mermaid
+flowchart TB
+    attacker["🌐 Anonymous client"]
+    endpointNode["POST /endpoint (no auth)"]
+    sinkNode["privileged sink"]
+    impactNode["💥 impact"]
+
+    attacker --> endpointNode --> sinkNode --> impactNode
+
+    classDef start fill:#eceff1,stroke:#546e7a,color:#263238
+    classDef transport fill:#ffe0b2,stroke:#ef6c00,color:#e65100
+    classDef shared fill:#e1bee7,stroke:#7b1fa2,color:#4a148c
+    classDef domain fill:#c8e6c9,stroke:#2e7d32,color:#1b5e20
+
+    class attacker start
+    class endpointNode transport
+    class sinkNode shared
+    class impactNode domain
+```
+
+Sequence-diagram init block (use verbatim when needed):
 
 ```text
-Add another escaping layer
-```
-
-Examples:
-
-```text
-shell string
-→ argv API
-
-long-lived PAT
-→ short-lived installation token
-
-optional authentication
-→ mandatory authentication
-
-caller-selected credential
-→ server-side identity/resource mapping
-
-string JSON
-→ structured JSON encoder
-
-unrestricted URL
-→ destination allowlist/policy
-
-documentation claim
-→ executable regression test
+%%{init: {"theme": "base", "themeVariables": {"actorBkg": "#b2dfdb", "actorBorder": "#00796b", "actorTextColor": "#004d40", "actorLineColor": "#00695c", "signalColor": "#00695c", "signalTextColor": "#212121", "labelBoxBkgColor": "#e0f2f1", "labelTextColor": "#004d40", "noteBkgColor": "#fff9c4", "noteBorderColor": "#f9a825", "noteTextColor": "#3e2723"}}}%%
 ```
 
 ---
 
-# 40. Independent Verification
-
-If remediation is performed, perform a **separate verification pass**.
-
-Do not assume:
-
-```text
-I recommended fix
-→ I implemented fix
-→ fix is correct
-```
-
-Instead:
-
-```text
-Original finding
-      ↓
-Remediation
-      ↓
-Fresh source review
-      ↓
-Regression test
-      ↓
-Negative test
-      ↓
-Attack-path retest
-      ↓
-Independent verification
-```
-
-Look specifically for:
-
-- incomplete fixes;
-- alternate attack paths;
-- bypasses;
-- inconsistent endpoint behavior;
-- regressions;
-- security checks applied after privileged work;
-- fixes that only protect one code path.
-
----
-
-# 41. Final Security Gates
-
-Report four gates.
-
-## Gate 0 — Unsafe
-
-Any exploitable P0 remains.
-
-Result:
-
-> **NOT SAFE FOR PRODUCTION**
-
-## Gate 1 — Secure Baseline
-
-Require:
-
-- P0 = 0;
-- exploitable P1 = 0 for critical paths;
-- authentication bypass = 0;
-- authorization bypass = 0;
-- command injection = 0;
-- credential exposure = 0;
-- arbitrary privileged workflow/image execution = 0.
-
-## Gate 2 — Hardened
-
-Additionally require:
-
-- replay protection;
-- rate/resource limits;
-- SSRF defenses;
-- secret rotation;
-- security regression tests;
-- resource binding;
-- dependency/security scanning;
-- appropriate supply-chain controls.
-
-## Gate 3 — Assured
-
-Additionally require, where appropriate:
-
-- independent security review;
-- SAST;
-- SCA;
-- secret scanning;
-- OpenSSF Scorecard;
-- supply-chain review;
-- provenance/signing;
-- incident-response readiness.
-
-Do not claim certification or formal compliance unless an appropriate assessment has actually occurred.
-
----
-
-# 42. Final Security Dashboard
-
-Produce a concise dashboard:
-
-| Area | Status | Critical Findings | High | Medium | Evidence |
-|---|---|---:|---:|---:|---|
-| Authentication | 🟢/🟡/🔴 | | | | |
-| Authorization | | | | | |
-| Resource Binding | | | | | |
-| Webhooks | | | | | |
-| Command Execution | | | | | |
-| Git Operations | | | | | |
-| Docker | | | | | |
-| CI/CD | | | | | |
-| Credentials | | | | | |
-| SSRF | | | | | |
-| API Security | | | | | |
-| Supply Chain | | | | | |
-| Abuse Resistance | | | | | |
-| Error Handling | | | | | |
-| Testing | | | | | |
-
----
-
-# 43. Final Verdict
-
-The final report must answer these questions explicitly:
-
-### A. Is the bot currently safe to deploy?
-
-Answer:
-
-```text
-YES
-NO
-CONDITIONAL
-UNKNOWN
-```
-
-### B. What are the remaining exploitable attack paths?
-
-List them.
-
-### C. What privileged capabilities remain exposed?
-
-List them.
-
-### D. Which controls are verified?
-
-List evidence.
-
-### E. Which controls are only claimed?
-
-List them.
-
-### F. What must be fixed before production?
-
-Give an ordered list.
-
-### G. What can be deferred?
-
-Give an ordered list.
-
-### H. What residual risk remains after remediation?
-
-Explain it.
-
-### I. How confident are you?
-
-Use:
-
-```text
-HIGH
-MEDIUM
-LOW
-```
-
-and explain why.
-
----
-
-# 44. Important Distinction in Security Claims
-
-Do not use vague claims such as:
-
-> “The bot is secure.”
-
-Prefer evidence-based claims such as:
-
-> “The reviewed revision contains no verified P0 vulnerabilities in the assessed scope.”
-
-or:
-
-> “The bot satisfies the defined production security baseline for authentication, authorization, command execution, credential handling, and webhook verification.”
-
-Only claim “industry standard,” “compliant,” or equivalent when the relevant standard has actually been assessed against its requirements.
-
----
-
-# 45. Machine-Readable Summary
-
-At the end produce a compact machine-readable summary containing:
-
-```text
-repository_revision
-audit_date
-scope
-overall_status
-confidence
-p0_count
-p1_count
-p2_count
-p3_count
-confirmed_findings
-verified_fixed_findings
-unverified_findings
-open_security_gates
-security_invariants
-required_preproduction_actions
-deferred_hardening_actions
-standards_reviewed
-tests_executed
-tests_failed
-```
-
-Do not fabricate fields for which evidence is unavailable.
-
----
-
-# 46. Audit Output Order
-
-Produce the final documentation in this order:
-
-1. Executive Summary
-2. Security Verdict
-3. Architecture
-4. System Context Diagram
-5. Data-Flow Diagram
-6. Trust Boundaries
-7. Assets
-8. Entry Points
-9. Authentication
-10. Authorization
-11. Identity / Resource Binding
-12. Command Execution
-13. Git Security
-14. Docker Security
-15. CI/CD Security
-16. Webhook Security
-17. SSRF
-18. Credential Security
-19. API / Serialization Security
-20. Abuse Resistance
-21. Error Handling
-22. Supply Chain
-23. Threat Model
-24. Attack Paths
-25. Findings
-26. Security Control Matrix
-27. Regression Tests
-28. Remediation Plan
-29. Verification Results
-30. Security Gates
-31. Residual Risk
-32. Incident / Disclosure Requirements
-33. Machine-Readable Summary
-
-Keep the executive summary concise. Put technical evidence deeper in the document.
-
----
-
-# 47. Audit Quality Rules
-
-Before finalizing, verify:
-
-- [ ] Every public endpoint was identified.
-- [ ] Every privileged operation was identified.
-- [ ] Every credential was inventoried.
-- [ ] Every credential-consuming operation was traced.
-- [ ] Every shell execution path was inspected.
-- [ ] Every attacker-controlled command argument was traced.
-- [ ] Every webhook authentication path was tested.
-- [ ] Authentication and authorization were evaluated separately.
-- [ ] Resource/identity binding was evaluated.
-- [ ] GitHub/GitLab permissions were reviewed.
-- [ ] Docker/image selection was reviewed.
-- [ ] CI/workflow mutation was reviewed.
-- [ ] SSRF paths were reviewed.
-- [ ] Replay was considered.
-- [ ] Resource exhaustion was considered.
-- [ ] Secret leakage paths were reviewed.
-- [ ] Error handling was reviewed.
-- [ ] Supply-chain implications were reviewed.
-- [ ] Security invariants were defined.
-- [ ] Critical findings have regression tests.
-- [ ] Negative tests exist.
-- [ ] Fixes were independently verified.
-- [ ] Documentation reflects evidence rather than claims.
-- [ ] No unsupported compliance claim was made.
-
----
-
-# 48. Absolute Rules
-
-1. **Do not trust `security.md` merely because it exists.**
-2. **Do not trust previous audit results without re-verification.**
-3. **Do not equate authentication with authorization.**
-4. **Do not trust caller-controlled identity/resource selectors.**
-5. **Do not interpolate attacker-controlled data into shell commands.**
-6. **Do not allow missing authentication to become a successful request.**
-7. **Do not treat security-sensitive exceptions as harmless.**
-8. **Do not treat an attacker-controlled Docker image as harmless input.**
-9. **Do not treat CI configuration as ordinary data when it can execute code.**
-10. **Do not expose secrets through URLs, argv, logs, traces, artifacts, or public output.**
-11. **Do not claim a vulnerability is fixed without evidence.**
-12. **Do not downgrade a vulnerability simply because exploitation is inconvenient.**
-13. **Do not create compliance paperwork that does not improve the security decision.**
-14. **Prioritize exploitable security properties over documentation completeness.**
-15. **Prefer architectural controls over fragile escaping or filtering.**
-16. **Keep supply-chain security in scope wherever the bot can influence code, builds, images, workflows, or artifacts.**
-17. **A successful security audit must demonstrate security properties, not merely produce a long report.**
-
----
-
-# 49. Execution Strategy
-
-Execute the work in distinct phases.
-
-### Phase 1 — Read-only security revisit
-
-No code changes.
-
-Determine:
-
-- actual architecture;
-- actual attack surface;
-- current vulnerabilities;
-- whether previous findings still exist;
-- whether previous fixes are actually effective.
-
-### Phase 2 — Remediation
-
-Only after Phase 1:
-
-- fix P0/P1 findings;
-- add regression tests;
-- improve architecture;
-- update security controls.
-
-### Phase 3 — Independent verification
-
-Treat the remediation as untrusted.
-
-Repeat:
-
-- source review;
-- attack-path analysis;
-- negative testing;
-- regression testing;
-- authorization review;
-- command-execution review;
-- credential-flow review.
-
-### Phase 4 — Documentation
-
-Only after verification:
-
-- update security documentation;
-- update diagrams;
-- update control matrix;
-- update risk register;
-- record verified status;
-- document residual risk.
-
-The final documentation must describe the **verified state of the repository**, not the intended state.
-
----
-
-# 50. Primary Success Criterion
-
-The audit succeeds only if it can answer, with evidence:
-
-> **“Can an untrusted actor cause this privileged bot to perform an action that the actor should not be able to cause?”**
-
-For every meaningful path, demonstrate either:
-
-```text
-UNTRUSTED INPUT
-      ↓
-AUTHENTICATED
-      ↓
-AUTHORIZED
-      ↓
-RESOURCE-BOUND
-      ↓
-VALIDATED
-      ↓
-SAFE EXECUTION
-      ↓
-PRIVILEGED ACTION
-```
-
-or identify precisely where that chain breaks.
-
-The most important output is therefore **not the number of pages, diagrams, or standards mapped**.
-
-The most important output is:
-
-> **A defensible, evidence-backed determination of whether the bot's privileged capabilities can be abused by an untrusted actor, together with verified remediation and regression evidence.**
+## 15. 🧩 Core principle
+
+The audit is not a contest to find the most weaknesses. The objective is to make the
+bot safe enough to trust with the privileges it holds. If an untrusted person can
+turn those privileges against the host, repositories, CI, credentials, or external
+services without authorization: **demonstrate it, prioritize it, and explain the
+fix.** If not: **say so clearly.** Do not manufacture severity because a stronger
+enterprise control exists.
