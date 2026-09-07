@@ -368,9 +368,7 @@ inflated theoretical findings.
 
 ## 14. 🎨 Mermaid style
 
-Follow `vitamin-workbench/docs/style/mermaid.md`. Embed the `classDef` palette inline
-in every flowchart so it renders outside MkDocs; use the sequence-diagram `init`
-block when a sequence diagram is expected to render standalone.
+Embed the `classDef` palette inline in every flowchart so it renders outside MkDocs; use the sequence-diagram `init` block when a sequence diagram is expected to render standalone.
 
 | Class | Fill | Stroke | Text |
 |---|---|---|---|
