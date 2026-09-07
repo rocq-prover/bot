@@ -487,12 +487,3 @@ flowchart LR
 3. **Per-project GitLab secrets**: Key webhook secrets by project ID in `src/bot.ml:12` (P2-07).
 4. **Structured JSON construction**: Replace string concatenation with `Yojson` in `GitHub_mutations.ml:266` (P2-09, P3-06).
 5. **Verify pusher identity**: Gate CI edits on commit pusher membership in `pr_sync.ml:55` (P2-08).
-
----
-
-## 📣 Vulnerability Disclosure Policy
-
-* **Reporting Channel**: Open a GitHub Private Security Advisory or contact repository maintainers via Zulip.
-* **Response Timeline**: Acknowledge within 5 business days; provide status updates every 14 days.
-* **Fix Target**: Critical vulnerabilities patched within 30 days; non-critical within 90 days.
-* **Embargo**: 90 days from initial report prior to public disclosure.
