@@ -132,16 +132,21 @@ let handle_comment_created ~bot_info ~key ~app_id ~github_bot_name
               body
             && comment_info.issue.pull_request && Option.is_some install_id
           then
+            (* full/light is Rocq-specific; ignored unless use_rocq_ci_options. *)
             let full_ci =
-              match Str.matched_group 1 body with
-              | "full" ->
-                  Some true
-              | "light" ->
-                  Some false
-              | "" ->
-                  None
+              match repo_config with
+              | Some cfg when cfg.jobs.use_rocq_ci_options -> (
+                match Str.matched_group 1 body with
+                | "full" ->
+                    Some true
+                | "light" ->
+                    Some false
+                | "" ->
+                    None
+                | _ ->
+                    failwith "Impossible group value." )
               | _ ->
-                  failwith "Impossible group value."
+                  None
             in
             match repo_config with
             | Some cfg
