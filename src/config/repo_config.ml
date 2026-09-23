@@ -27,6 +27,8 @@ type t =
   ; minimizer_url: string option
   ; contributing_url: string option
   ; same_branch_warning: string option
+  ; mergeable_base_branch: string option
+  ; overlay_path_regexp: string option
   ; jobs: repo_jobs_config }
 
 let default_jobs =
@@ -113,6 +115,8 @@ let parse_one tbl key =
           ; minimizer_url= subkey_value tbl key "minimizer_url"
           ; contributing_url= subkey_value tbl key "contributing_url"
           ; same_branch_warning= subkey_value tbl key "same_branch_warning"
+          ; mergeable_base_branch= subkey_value tbl key "mergeable_base_branch"
+          ; overlay_path_regexp= subkey_value tbl key "overlay_path_regexp"
           ; jobs= parse_jobs tbl key }
       | _ ->
           failwith

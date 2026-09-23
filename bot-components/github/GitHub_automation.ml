@@ -13,7 +13,7 @@ let cc_maintainers ?alert_mention () =
       f "\ncc %s" mention
 
 let rec merge_pull_request_action ~bot_info ~org ~pushers_team ?alert_mention
-    ?(t = 1.) comment_info =
+    ?mergeable_base_branch ?overlay_path_regexp ?(t = 1.) comment_info =
   let pr = comment_info.issue in
   let reasons_for_not_merging =
     List.filter_opt
@@ -66,7 +66,8 @@ let rec merge_pull_request_action ~bot_info ~org ~pushers_team ?alert_mention
                 Lwt_unix.sleep t
                 >>= fun () ->
                 merge_pull_request_action ~t:(t *. 2.) ~bot_info ~org
-                  ~pushers_team ?alert_mention comment_info
+                  ~pushers_team ?alert_mention ?mergeable_base_branch
+                  ?overlay_path_regexp comment_info
                 >>= fun () -> Lwt.return_ok ()
             else if
               (not comment_info.review_comment)
@@ -79,15 +80,19 @@ let rec merge_pull_request_action ~bot_info ~org ~pushers_team ?alert_mention
                     because this puts less guarantee on the authenticity of \
                     the author of the request."
                    comment_info.author )
-            else if not (String.equal reviews_info.baseRef "master") then
+            else if
+              match mergeable_base_branch with
+              | Some expected ->
+                  not (String.equal reviews_info.baseRef expected)
+              | None ->
+                  false
+            then
+              let expected = Option.value_exn mergeable_base_branch in
               Lwt.return_error
                 (f
-                   "@%s: This PR targets branch `%s` instead of `master`. Only \
-                    release managers can merge in release branches. If you are \
-                    the release manager for this branch, you should use the \
-                    `dev/tools/merge-pr.sh` script to merge this PR. Merging \
-                    with the bot is not supported yet."
-                   comment_info.author reviews_info.baseRef )
+                   "@%s: This PR targets branch `%s` instead of `%s`. The bot \
+                    only merges pull requests into `%s`."
+                   comment_info.author reviews_info.baseRef expected expected )
             else
               match reviews_info.review_decision with
               | NONE | REVIEW_REQUIRED ->
@@ -128,32 +133,36 @@ let rec merge_pull_request_action ~bot_info ~org ~pushers_team ?alert_mention
                               comment_info.author comment_info.author )
                         ~merge_method:MERGE ()
                       >>= fun () ->
-                      match
-                        List.fold_left ~init:[] reviews_info.files
-                          ~f:(fun acc f ->
-                            if
-                              String_utils.string_match
-                                ~regexp:"dev/ci/user-overlays/\\(.*\\)" f
-                            then
-                              let f = Str.matched_group 1 f in
-                              if String.equal f "README.md" then acc
-                              else f :: acc
-                            else acc )
-                      with
-                      | [] ->
+                      match overlay_path_regexp with
+                      | None ->
                           Lwt.return_ok ()
-                      | overlays ->
-                          GitHub_mutations.post_comment ~bot_info ~id:pr.id
-                            ~message:
-                              (f
-                                 "@%s: Please take care of the following \
-                                  overlays:\n\
-                                  %s"
-                                 comment_info.author
-                                 (List.fold_left overlays ~init:""
-                                    ~f:(fun s o -> s ^ f "- %s\n" o ) ) )
-                          >>= Utils.report_on_posting_comment
-                          >>= fun () -> Lwt.return_ok () )
+                      | Some overlay_regexp -> (
+                        match
+                          List.fold_left ~init:[] reviews_info.files
+                            ~f:(fun acc f ->
+                              if
+                                String_utils.string_match ~regexp:overlay_regexp
+                                  f
+                              then
+                                let f = Str.matched_group 1 f in
+                                if String.equal f "README.md" then acc
+                                else f :: acc
+                              else acc )
+                        with
+                        | [] ->
+                            Lwt.return_ok ()
+                        | overlays ->
+                            GitHub_mutations.post_comment ~bot_info ~id:pr.id
+                              ~message:
+                                (f
+                                   "@%s: Please take care of the following \
+                                    overlays:\n\
+                                    %s"
+                                   comment_info.author
+                                   (List.fold_left overlays ~init:""
+                                      ~f:(fun s o -> s ^ f "- %s\n" o ) ) )
+                            >>= Utils.report_on_posting_comment
+                            >>= fun () -> Lwt.return_ok () ) )
                   | Error e ->
                       Lwt.return_error
                         ( f "Something unexpected happened: %s" e
