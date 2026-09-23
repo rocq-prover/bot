@@ -52,4 +52,4 @@
 (test
  (name test_bench)
  (modules test_bench)
- (libraries alcotest bot-components coq-bot.utils base))
+ (libraries alcotest bot-components coq-bot.config base))
