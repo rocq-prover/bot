@@ -30,7 +30,7 @@ let cfg_missing_gitlab =
     bench_job = "bench"
     |} ) )
 
-let job_link_prefix cfg ~job_name =
+let job_link_prefix (cfg : Repo_config.t) ~job_name =
   match (cfg.gitlab_domain, cfg.gitlab_owner, cfg.gitlab_repo) with
   | Some domain, Some owner, Some repo ->
       Some
