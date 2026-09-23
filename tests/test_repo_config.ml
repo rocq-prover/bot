@@ -3,9 +3,13 @@ open Alcotest
 
 let parse s = Repo_config.make_repo_config_table (Utils.toml_of_string s)
 
+let same_branch_warning_template =
+  "Do not use {base_branch}. See {contributing_url}."
+
 let test_full_config () =
   let toml =
-    {|
+    Printf.sprintf
+      {|
     [repositories.rocq]
     github = "rocq-prover/rocq"
     gitlab_domain = "gitlab.inria.fr"
@@ -16,6 +20,7 @@ let test_full_config () =
     alert_mention = "@rocq-prover/coqbot-maintainers"
     minimizer_url = "https://example.com"
     contributing_url = "https://example.com/CONTRIBUTING.md"
+    same_branch_warning = "%s"
 
     [repositories.rocq.backporting]
     github_project_number = 11
@@ -35,6 +40,7 @@ let test_full_config () =
     silence_docker_manifest_errors = true
     doc_artifact_jobs = ["doc:refman", "doc:stdlib"]
     |}
+      same_branch_warning_template
   in
   let tbl = parse toml in
   match Repo_config.find_by_github ~owner:"rocq-prover" ~repo:"rocq" tbl with
@@ -55,6 +61,8 @@ let test_full_config () =
       (check (option string))
         "contribute_url" (Some "https://example.com/CONTRIBUTING.md")
         cfg.contributing_url ;
+      (check bool) "same_branch_warning set" true
+        (Option.is_some cfg.same_branch_warning) ;
       (check (option string))
         "trigger_ci team" (Some "contributors")
         (Repo_config.team_for_permission cfg "trigger_ci") ;
@@ -199,41 +207,51 @@ let test_jobs_helper () =
     "job url missing" None
     (Repo_config.gitlab_job_url cfg_off ~job_id:1)
 
-let test_welcome_message () =
-  let with_url =
+let test_same_branch_warning () =
+  let with_warning =
     parse
-      {|
+      (Printf.sprintf
+         {|
     [repositories.rocq]
     github = "rocq-prover/rocq"
     contributing_url = "https://example.com/CONTRIBUTING.md"
+    same_branch_warning = "%s"
     |}
+         same_branch_warning_template )
   in
-  let without_url =
+  let without_warning =
     parse {|
     [repositories.demo]
     github = "my-org/my-repo"
+    contributing_url = "https://example.com/CONTRIBUTING.md"
     |}
   in
   let cfg_on =
     Option.value_exn
-      (Repo_config.find_by_github ~owner:"rocq-prover" ~repo:"rocq" with_url)
+      (Repo_config.find_by_github ~owner:"rocq-prover" ~repo:"rocq"
+         with_warning )
   in
   let cfg_off =
     Option.value_exn
-      (Repo_config.find_by_github ~owner:"my-org" ~repo:"my-repo" without_url)
+      (Repo_config.find_by_github ~owner:"my-org" ~repo:"my-repo"
+         without_warning )
   in
-  (check bool) "with url + opened + same branch" true
-    (Repo_config.should_send_welcome_message cfg_on ~opened:true
+  (check bool) "with warning + opened + same branch" true
+    (Repo_config.should_warn_same_branch_name cfg_on ~opened:true
        ~same_branch_name:true ) ;
-  (check bool) "without url" false
-    (Repo_config.should_send_welcome_message cfg_off ~opened:true
+  (check bool) "without warning" false
+    (Repo_config.should_warn_same_branch_name cfg_off ~opened:true
        ~same_branch_name:true ) ;
   (check bool) "different branch" false
-    (Repo_config.should_send_welcome_message cfg_on ~opened:true
+    (Repo_config.should_warn_same_branch_name cfg_on ~opened:true
        ~same_branch_name:false ) ;
   (check bool) "not opened" false
-    (Repo_config.should_send_welcome_message cfg_on ~opened:false
-       ~same_branch_name:true )
+    (Repo_config.should_warn_same_branch_name cfg_on ~opened:false
+       ~same_branch_name:true ) ;
+  (check (option string))
+    "formatted message"
+    (Some "Do not use master. See https://example.com/CONTRIBUTING.md.")
+    (Repo_config.format_same_branch_warning cfg_on ~base_branch:"master")
 
 let () =
   run "Repo_config tests"
@@ -245,4 +263,4 @@ let () =
         ; ("find miss", `Quick, test_find_miss)
         ; ("backport enabled", `Quick, test_backport_enabled)
         ; ("jobs", `Quick, test_jobs_helper)
-        ; ("welcome message", `Quick, test_welcome_message) ] ) ]
+        ; ("same branch warning", `Quick, test_same_branch_warning) ] ) ]

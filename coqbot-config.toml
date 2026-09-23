@@ -51,6 +51,13 @@ app_id="31373"
  alert_mention = "@rocq-prover/coqbot-maintainers"
  minimizer_url = "https://github.com/rocq-community/run-coq-bug-minimizer/actions"
  contributing_url = "https://github.com/rocq-prover/rocq/blob/master/CONTRIBUTING.md"
+ # Posted when a PR is opened with the same head and base branch name.
+ # Placeholders: {base_branch}, {contributing_url}
+ same_branch_warning = """
+Hello, thanks for your pull request!
+Please avoid using {base_branch} as the name of your head branch when it matches the base branch.
+You may want to read the [contributing guide]({contributing_url}).
+"""
 
  [repositories.rocq.backporting]
  github_project_number = 11
