@@ -22,6 +22,7 @@ type t =
   ; teams: team_permission list
   ; minimizer_url: string option
   ; contributing_url: string option
+  ; same_branch_warning: string option
   ; jobs: repo_jobs_config }
 
 val make_repo_config_table : Toml.Types.table -> (string, t) Base.Hashtbl.t
@@ -51,5 +52,7 @@ val team_for_permission : t -> string -> string option
 
 val team_mention : t -> permission:string -> string option
 
-val should_send_welcome_message :
+val should_warn_same_branch_name :
   t -> same_branch_name:bool -> opened:bool -> bool
+
+val format_same_branch_warning : t -> base_branch:string -> string option

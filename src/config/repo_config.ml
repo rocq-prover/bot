@@ -25,6 +25,7 @@ type t =
   ; teams: team_permission list
   ; minimizer_url: string option
   ; contributing_url: string option
+  ; same_branch_warning: string option
   ; jobs: repo_jobs_config }
 
 let default_jobs =
@@ -98,6 +99,7 @@ let parse_one tbl key =
           ; teams= parse_teams tbl key
           ; minimizer_url= subkey_value tbl key "minimizer_url"
           ; contributing_url= subkey_value tbl key "contributing_url"
+          ; same_branch_warning= subkey_value tbl key "same_branch_warning"
           ; jobs= parse_jobs tbl key }
       | _ ->
           failwith
@@ -185,5 +187,18 @@ let team_mention cfg ~permission =
   | Some team ->
       Some (f "@%s/%s" (project_organization cfg) team)
 
-let should_send_welcome_message cfg ~same_branch_name ~opened =
-  opened && same_branch_name && Option.is_some cfg.contributing_url
+let should_warn_same_branch_name cfg ~same_branch_name ~opened =
+  opened && same_branch_name && Option.is_some cfg.same_branch_warning
+
+let format_same_branch_warning cfg ~base_branch =
+  match cfg.same_branch_warning with
+  | None ->
+      None
+  | Some template ->
+      let contributing_url = Option.value cfg.contributing_url ~default:"" in
+      Some
+        ( template
+        |> String.substr_replace_all ~pattern:"{base_branch}" ~with_:base_branch
+        |> String.substr_replace_all ~pattern:"{contributing_url}"
+             ~with_:contributing_url
+        |> String.strip )

@@ -217,22 +217,20 @@ let pull_request_updated_action ~bot_info
     ~repo_config ~gitlab_mapping ~github_mapping =
   ( match (action, repo_config) with
   | PullRequestOpened, Some cfg
-    when Repo_config.should_send_welcome_message cfg ~opened:true
+    when Repo_config.should_warn_same_branch_name cfg ~opened:true
            ~same_branch_name:
-             (String.equal pr_info.base.branch.name pr_info.head.branch.name) ->
-      let contributing_url = Option.value_exn cfg.contributing_url in
-      (fun () ->
-        GitHub_mutations.post_comment ~bot_info ~id:pr_info.issue.id
-          ~message:
-            (f
-               "Hello, thanks for your pull request!\n\
-                In the future, we strongly recommend that you *do not* use %s \
-                as the name of your branch when submitting a pull request.\n\
-                By the way, you may be interested in reading [our contributing \
-                guide](%s)."
-               pr_info.base.branch.name contributing_url )
-        >>= Utils.report_on_posting_comment )
-      |> Lwt.async
+             (String.equal pr_info.base.branch.name pr_info.head.branch.name) -> (
+    match
+      Repo_config.format_same_branch_warning cfg
+        ~base_branch:pr_info.base.branch.name
+    with
+    | None ->
+        ()
+    | Some message ->
+        (fun () ->
+          GitHub_mutations.post_comment ~bot_info ~id:pr_info.issue.id ~message
+          >>= Utils.report_on_posting_comment )
+        |> Lwt.async )
   | _ ->
       () ) ;
   (fun () ->
