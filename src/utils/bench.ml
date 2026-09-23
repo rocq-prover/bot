@@ -37,7 +37,7 @@ let fetch_bench_results ~repo_config ~job_info () =
   | None ->
       Lwt.return_error
         "bench artifacts require gitlab_domain/owner/repo in repo_config"
-  | Some _ ->
+  | Some _ -> (
       let artifact_url file =
         (* gitlab_pages_artifact_url already succeeded for this config. *)
         Option.value_exn
@@ -47,7 +47,9 @@ let fetch_bench_results ~repo_config ~job_info () =
       in
       let* summary_table = artifact_url "bench_summary" |> fetch_artifact in
       let* failures =
-        let* failures_or_err = artifact_url "bench_failures" |> fetch_artifact in
+        let* failures_or_err =
+          artifact_url "bench_failures" |> fetch_artifact
+        in
         match failures_or_err with
         | Ok s ->
             Lwt.return s
@@ -108,7 +110,7 @@ let fetch_bench_results ~repo_config ~job_info () =
                 ; slow_table
                 ; slow_number
                 ; fast_table
-                ; fast_number } )
+                ; fast_number } ) )
 
 let bench_text = function
   | Ok results ->
@@ -270,7 +272,7 @@ let run_bench ~bot_info ~repo_config ~team ?key_value_pairs comment_info =
           "Ignoring bench request: bench_job and gitlab_domain/owner/repo must \
            be configured."
       >>= Utils.report_on_posting_comment
-  | Some gitlab_domain, Some gitlab_owner, Some gitlab_repo, Some bench_job ->
+  | Some gitlab_domain, Some gitlab_owner, Some gitlab_repo, Some bench_job -> (
       (* We need the GitLab build_id and project_id. Currently there is no good
          way to query this data so we have to jump through some somewhat useless
          hoops in order to get our hands on this information. TODO: do this more
@@ -300,9 +302,7 @@ let run_bench ~bot_info ~repo_config ~team ?key_value_pairs comment_info =
                 f "[%s](https://%s/%s/%s/-/jobs/" bench_job gitlab_domain
                   gitlab_owner gitlab_repo
               in
-              let regexp =
-                f {|.*%s\([0-9]*\)|} (Str.quote job_link_prefix)
-              in
+              let regexp = f {|.*%s\([0-9]*\)|} (Str.quote job_link_prefix) in
               ( if String_utils.string_match ~regexp summary then
                   Str.matched_group 1 summary
                 else
@@ -314,8 +314,8 @@ let run_bench ~bot_info ~repo_config ~team ?key_value_pairs comment_info =
               let regexp = {|.*GitLab Project ID: \([0-9]*\)|} in
               ( if String_utils.string_match ~regexp summary then
                   Str.matched_group 1 summary
-                else
-                  raise @@ Stdlib.Failure "Could not find GitLab Project ID" )
+                else raise @@ Stdlib.Failure "Could not find GitLab Project ID"
+              )
               |> Int.of_string
             in
             Lwt.return_ok (build_id, project_id)
@@ -338,5 +338,5 @@ let run_bench ~bot_info ~repo_config ~team ?key_value_pairs comment_info =
           GitHub_mutations.post_comment ~bot_info ~message:err ~id:pr.id
           >>= Utils.report_on_posting_comment
       | Ok false, _ ->
-          GitHub_automation.inform_user_not_in_contributors ~bot_info ~org
-            ~team ~comment_info
+          GitHub_automation.inform_user_not_in_contributors ~bot_info ~org ~team
+            ~comment_info )

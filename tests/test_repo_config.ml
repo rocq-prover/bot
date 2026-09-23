@@ -57,7 +57,8 @@ let test_full_config () =
       (check int) "teams" 2 (List.length cfg.teams) ;
       (check (option string)) "bench_job" (Some "bench") cfg.jobs.bench_job ;
       (check (list (pair string string)))
-        "bench_native_variables" [("coq_native", "yes")]
+        "bench_native_variables"
+        [("coq_native", "yes")]
         cfg.jobs.bench_native_variables ;
       (check bool) "bench_native_enabled" true
         (Repo_config.bench_native_enabled cfg) ;
@@ -236,7 +237,8 @@ let test_same_branch_warning () =
          same_branch_warning_template )
   in
   let without_warning =
-    parse {|
+    parse
+      {|
     [repositories.demo]
     github = "my-org/my-repo"
     contributing_url = "https://example.com/CONTRIBUTING.md"
@@ -244,8 +246,7 @@ let test_same_branch_warning () =
   in
   let cfg_on =
     Option.value_exn
-      (Repo_config.find_by_github ~owner:"rocq-prover" ~repo:"rocq"
-         with_warning )
+      (Repo_config.find_by_github ~owner:"rocq-prover" ~repo:"rocq" with_warning)
   in
   let cfg_off =
     Option.value_exn

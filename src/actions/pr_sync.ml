@@ -219,7 +219,8 @@ let pull_request_updated_action ~bot_info
   | PullRequestOpened, Some cfg
     when Repo_config.should_warn_same_branch_name cfg ~opened:true
            ~same_branch_name:
-             (String.equal pr_info.base.branch.name pr_info.head.branch.name) -> (
+             (String.equal pr_info.base.branch.name pr_info.head.branch.name)
+    -> (
     match
       Repo_config.format_same_branch_warning cfg
         ~base_branch:pr_info.base.branch.name
