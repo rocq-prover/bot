@@ -3,7 +3,9 @@ open Utils
 
 type repo_jobs_config =
   { bench_job: string option
+  ; bench_native_variables: (string * string) list
   ; use_rocq_job_status: bool
+  ; use_rocq_ci_options: bool
   ; silence_docker_manifest_errors: bool
   ; doc_artifact_jobs: string list }
 
@@ -23,15 +25,28 @@ type t =
   ; alert_mention: string option
   ; teams: team_permission list
   ; minimizer_url: string option
+  ; contributing_url: string option
+  ; same_branch_warning: string option
+  ; mergeable_base_branch: string option
+  ; overlay_path_regexp: string option
   ; jobs: repo_jobs_config }
 
 let default_jobs =
   { bench_job= None
+  ; bench_native_variables= []
   ; use_rocq_job_status= false
+  ; use_rocq_ci_options= false
   ; silence_docker_manifest_errors= false
   ; doc_artifact_jobs= [] }
 
 let default_backporting = {github_project_number= None}
+
+let parse_key_value_pair s =
+  match String.lsplit2 s ~on:'=' with
+  | Some (key, value) when not (String.is_empty key) ->
+      Some (key, value)
+  | _ ->
+      None
 
 let parse_jobs tbl key =
   match subkey_table tbl key "jobs" with
@@ -42,8 +57,14 @@ let parse_jobs tbl key =
           key_value jobs_tbl "bench_job"
           |> Option.bind ~f:(fun s ->
               if String.is_empty s then None else Some s )
+      ; bench_native_variables=
+          key_array jobs_tbl "bench_native_variables"
+          |> Option.value ~default:[]
+          |> List.filter_map ~f:parse_key_value_pair
       ; use_rocq_job_status=
           key_bool jobs_tbl "use_rocq_job_status" |> Option.value ~default:false
+      ; use_rocq_ci_options=
+          key_bool jobs_tbl "use_rocq_ci_options" |> Option.value ~default:false
       ; silence_docker_manifest_errors=
           key_bool jobs_tbl "silence_docker_manifest_errors"
           |> Option.value ~default:false
@@ -92,6 +113,10 @@ let parse_one tbl key =
           ; alert_mention= subkey_value tbl key "alert_mention"
           ; teams= parse_teams tbl key
           ; minimizer_url= subkey_value tbl key "minimizer_url"
+          ; contributing_url= subkey_value tbl key "contributing_url"
+          ; same_branch_warning= subkey_value tbl key "same_branch_warning"
+          ; mergeable_base_branch= subkey_value tbl key "mergeable_base_branch"
+          ; overlay_path_regexp= subkey_value tbl key "overlay_path_regexp"
           ; jobs= parse_jobs tbl key }
       | _ ->
           failwith
@@ -140,6 +165,9 @@ let is_bench_job cfg build_name =
   | None ->
       false
 
+let bench_native_enabled cfg =
+  not (List.is_empty cfg.jobs.bench_native_variables)
+
 let is_doc_artifact_job cfg build_name =
   List.mem cfg.jobs.doc_artifact_jobs build_name ~equal:String.equal
 
@@ -167,3 +195,30 @@ let gitlab_pages_artifact_url cfg ~job_id ~artifact =
            repo job_id artifact )
   | _ ->
       None
+
+let team_for_permission cfg permission =
+  List.find_map cfg.teams ~f:(fun t ->
+      if String.equal t.permission permission then Some t.team_name else None )
+
+let team_mention cfg ~permission =
+  match team_for_permission cfg permission with
+  | None ->
+      None
+  | Some team ->
+      Some (f "@%s/%s" (project_organization cfg) team)
+
+let should_warn_same_branch_name cfg ~same_branch_name ~opened =
+  opened && same_branch_name && Option.is_some cfg.same_branch_warning
+
+let format_same_branch_warning cfg ~base_branch =
+  match cfg.same_branch_warning with
+  | None ->
+      None
+  | Some template ->
+      let contributing_url = Option.value cfg.contributing_url ~default:"" in
+      Some
+        ( template
+        |> String.substr_replace_all ~pattern:"{base_branch}" ~with_:base_branch
+        |> String.substr_replace_all ~pattern:"{contributing_url}"
+             ~with_:contributing_url
+        |> String.strip )

@@ -2,6 +2,7 @@ val run_ci_action :
      bot_info:Bot_components.Bot_info.t
   -> comment_info:Bot_components.GitHub_types.comment_info
   -> ?full_ci:bool
+  -> repo_config:Repo_config.t
   -> gitlab_mapping:(string, string) Base.Hashtbl.t
   -> github_mapping:(string, string * string) Base.Hashtbl.t
   -> unit
@@ -13,6 +14,7 @@ val pull_request_updated_action :
   -> pr_info:
        Bot_components.GitHub_types.issue_info
        Bot_components.GitHub_types.pull_request_info
+  -> repo_config:Repo_config.t option
   -> gitlab_mapping:(string, string) Base.Hashtbl.t
   -> github_mapping:(string, string * string) Base.Hashtbl.t
   -> (Cohttp.Response.t * Cohttp_lwt__.Body.t) Lwt.t
