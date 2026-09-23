@@ -3,6 +3,7 @@ open Utils
 
 type repo_jobs_config =
   { bench_job: string option
+  ; bench_native_variables: (string * string) list
   ; use_rocq_job_status: bool
   ; use_rocq_ci_options: bool
   ; silence_docker_manifest_errors: bool
@@ -30,12 +31,20 @@ type t =
 
 let default_jobs =
   { bench_job= None
+  ; bench_native_variables= []
   ; use_rocq_job_status= false
   ; use_rocq_ci_options= false
   ; silence_docker_manifest_errors= false
   ; doc_artifact_jobs= [] }
 
 let default_backporting = {github_project_number= None}
+
+let parse_key_value_pair s =
+  match String.lsplit2 s ~on:'=' with
+  | Some (key, value) when not (String.is_empty key) ->
+      Some (key, value)
+  | _ ->
+      None
 
 let parse_jobs tbl key =
   match subkey_table tbl key "jobs" with
@@ -46,6 +55,10 @@ let parse_jobs tbl key =
           key_value jobs_tbl "bench_job"
           |> Option.bind ~f:(fun s ->
               if String.is_empty s then None else Some s )
+      ; bench_native_variables=
+          key_array jobs_tbl "bench_native_variables"
+          |> Option.value ~default:[]
+          |> List.filter_map ~f:parse_key_value_pair
       ; use_rocq_job_status=
           key_bool jobs_tbl "use_rocq_job_status" |> Option.value ~default:false
       ; use_rocq_ci_options=
@@ -147,6 +160,8 @@ let is_bench_job cfg build_name =
       String.equal name build_name
   | None ->
       false
+
+let bench_native_enabled cfg = not (List.is_empty cfg.jobs.bench_native_variables)
 
 let is_doc_artifact_job cfg build_name =
   List.mem cfg.jobs.doc_artifact_jobs build_name ~equal:String.equal

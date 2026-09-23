@@ -195,18 +195,19 @@ let handle_comment_created ~bot_info ~key ~app_id ~github_bot_name
             && comment_info.issue.pull_request && Option.is_some install_id
           then
             match repo_config with
-            | Some cfg -> (
+            | Some cfg
+              when Repo_config.bench_native_enabled cfg
+                   && Option.is_some cfg.jobs.bench_job -> (
               match
                 ( Repo_config.team_for_permission cfg "trigger_ci"
                 , cfg.gitlab_domain )
               with
-              | Some team, Some gitlab_domain ->
-                  let org = Repo_config.project_organization cfg in
+              | Some team, Some _ ->
                   (fun () ->
                     Bot_components.Github_installations.action_as_github_app
                       ~bot_info ~key ~app_id ~owner (fun ~bot_info ->
-                        Bench.run_bench ~bot_info ~org ~team ~gitlab_domain
-                          ~key_value_pairs:[("coq_native", "yes")]
+                        Bench.run_bench ~bot_info ~repo_config:cfg ~team
+                          ~key_value_pairs:cfg.jobs.bench_native_variables
                           comment_info ) )
                   |> Lwt.async ;
                   Server.respond_string ~status:`OK
@@ -214,12 +215,15 @@ let handle_comment_created ~bot_info ~key ~app_id ~github_bot_name
               | _ ->
                   Server.respond_string ~status:`OK
                     ~body:
-                      "Ignoring bench request: missing trigger_ci team or \
-                       gitlab_domain in repo_config."
+                      "Ignoring bench native request: missing trigger_ci team \
+                       or gitlab_domain in repo_config."
                     () )
-            | None ->
+            | _ ->
                 Server.respond_string ~status:`OK
-                  ~body:"Ignoring bench request: no repo_config." ()
+                  ~body:
+                    "Ignoring bench native request: bench_native_variables or \
+                     bench_job not configured."
+                  ()
           else if
             string_match
               ~regexp:(f "@%s:? [Bb]ench" @@ Str.quote github_bot_name)
@@ -227,17 +231,16 @@ let handle_comment_created ~bot_info ~key ~app_id ~github_bot_name
             && comment_info.issue.pull_request && Option.is_some install_id
           then
             match repo_config with
-            | Some cfg -> (
+            | Some cfg when Option.is_some cfg.jobs.bench_job -> (
               match
                 ( Repo_config.team_for_permission cfg "trigger_ci"
                 , cfg.gitlab_domain )
               with
-              | Some team, Some gitlab_domain ->
-                  let org = Repo_config.project_organization cfg in
+              | Some team, Some _ ->
                   (fun () ->
                     Bot_components.Github_installations.action_as_github_app
                       ~bot_info ~key ~app_id ~owner (fun ~bot_info ->
-                        Bench.run_bench ~bot_info ~org ~team ~gitlab_domain
+                        Bench.run_bench ~bot_info ~repo_config:cfg ~team
                           comment_info ) )
                   |> Lwt.async ;
                   Server.respond_string ~status:`OK
@@ -248,9 +251,9 @@ let handle_comment_created ~bot_info ~key ~app_id ~github_bot_name
                       "Ignoring bench request: missing trigger_ci team or \
                        gitlab_domain in repo_config."
                     () )
-            | None ->
+            | _ ->
                 Server.respond_string ~status:`OK
-                  ~body:"Ignoring bench request: no repo_config." ()
+                  ~body:"Ignoring bench request: bench_job not configured." ()
           else
             Server.respond_string ~status:`OK
               ~body:(f "Unhandled comment: %s" body)

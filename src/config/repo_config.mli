@@ -1,5 +1,6 @@
 type repo_jobs_config =
   { bench_job: string option
+  ; bench_native_variables: (string * string) list
   ; use_rocq_job_status: bool
   ; use_rocq_ci_options: bool
   ; silence_docker_manifest_errors: bool
@@ -38,6 +39,8 @@ val find_by_backport_project :
   install_id:int -> project_number:int -> (string, t) Base.Hashtbl.t -> t option
 
 val is_bench_job : t -> string -> bool
+
+val bench_native_enabled : t -> bool
 
 val is_doc_artifact_job : t -> string -> bool
 

@@ -73,6 +73,8 @@ You may want to read the [contributing guide]({contributing_url}).
  [repositories.rocq.jobs]
  # GitLab CI job name handled by bench status/results logic
  bench_job = "bench"
+ # CI variables for "@bot bench native"; omit or leave empty to disable that command
+ bench_native_variables = ["coq_native=yes"]
  # Use Rocq-specific failure summaries / allow-failure handling
  use_rocq_job_status = true
  # Inject Rocq-specific GitLab CI variables on PR sync (SKIP_DOCKER, FULL_CI)
