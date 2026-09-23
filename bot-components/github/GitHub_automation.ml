@@ -367,7 +367,6 @@ let remove_labels_if_present ~bot_info (issue : issue_info) labels =
 let inform_user_not_in_contributors ~bot_info ~org ~team ~comment_info =
   GitHub_mutations.post_comment ~bot_info ~id:comment_info.issue.id
     ~message:
-      (f
-         "Sorry, @%s, I only accept requests from members of the `@%s/%s` team."
+      (f "Sorry, @%s, I only accept requests from members of the `@%s/%s` team."
          comment_info.author org team )
   >>= Utils.report_on_posting_comment

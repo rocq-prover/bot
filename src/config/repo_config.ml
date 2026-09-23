@@ -165,7 +165,8 @@ let is_bench_job cfg build_name =
   | None ->
       false
 
-let bench_native_enabled cfg = not (List.is_empty cfg.jobs.bench_native_variables)
+let bench_native_enabled cfg =
+  not (List.is_empty cfg.jobs.bench_native_variables)
 
 let is_doc_artifact_job cfg build_name =
   List.mem cfg.jobs.doc_artifact_jobs build_name ~equal:String.equal
