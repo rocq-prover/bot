@@ -76,15 +76,13 @@ let update_pr ?full_ci ?(skip_author_check = false) ?repo_config ~bot_info
       >>= Utils.report_on_posting_comment
       >>= fun () -> Lwt.return_ok () )
     else
-      (* In Rocq Prover repo, we have several special cases:
-         1. if something has changed in dev/ci/docker/, we rebuild the Docker image
-         2. if there was a special label set, we run a full CI
+      (* When jobs.use_rocq_ci_options is set:
+         1. if something has changed in dev/ci/docker/, rebuild the Docker image
+         2. if a full/light CI label or command was set, set FULL_CI accordingly
       *)
       let get_options =
         match repo_config with
-        | Some cfg
-          when Option.is_some (Repo_config.team_for_permission cfg "trigger_ci")
-          ->
+        | Some cfg when cfg.jobs.use_rocq_ci_options ->
             Lwt.all
               [ ( git_test_modified ~base:pr_info.base.sha
                     ~head:pr_info.head.sha "dev/ci/docker/.*Dockerfile.*"
