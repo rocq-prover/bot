@@ -35,6 +35,7 @@ let test_full_config () =
 
     [repositories.rocq.jobs]
     bench_job = "bench"
+    bench_native_variables = ["coq_native=yes"]
     use_rocq_job_status = true
     use_rocq_ci_options = true
     silence_docker_manifest_errors = true
@@ -53,6 +54,11 @@ let test_full_config () =
         "alert" (Some "@rocq-prover/coqbot-maintainers") cfg.alert_mention ;
       (check int) "teams" 2 (List.length cfg.teams) ;
       (check (option string)) "bench_job" (Some "bench") cfg.jobs.bench_job ;
+      (check (list (pair string string)))
+        "bench_native_variables" [("coq_native", "yes")]
+        cfg.jobs.bench_native_variables ;
+      (check bool) "bench_native_enabled" true
+        (Repo_config.bench_native_enabled cfg) ;
       (check bool) "use_rocq_job_status" true cfg.jobs.use_rocq_job_status ;
       (check bool) "use_rocq_ci_options" true cfg.jobs.use_rocq_ci_options ;
       (check bool) "silence_docker_manifest_errors" true
@@ -85,6 +91,8 @@ let test_minimal_config () =
       (check (option int)) "project" None cfg.backporting.github_project_number ;
       (check bool) "use_rocq_job_status" false cfg.jobs.use_rocq_job_status ;
       (check bool) "use_rocq_ci_options" false cfg.jobs.use_rocq_ci_options ;
+      (check bool) "bench_native_enabled" false
+        (Repo_config.bench_native_enabled cfg) ;
       (check (list string)) "doc_artifact_jobs" [] cfg.jobs.doc_artifact_jobs
 
 let test_bad_github () =
@@ -162,6 +170,7 @@ let test_jobs_helper () =
 
     [repositories.rocq.jobs]
     bench_job = "bench"
+    bench_native_variables = ["coq_native=yes"]
     use_rocq_job_status = true
     use_rocq_ci_options = true
     silence_docker_manifest_errors = true

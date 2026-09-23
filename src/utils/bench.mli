@@ -11,7 +11,8 @@ module BenchResults : sig
 end
 
 val fetch_bench_results :
-     job_info:GitLab_types.ci_common_info GitLab_types.job_info
+     repo_config:Repo_config.t
+  -> job_info:GitLab_types.ci_common_info GitLab_types.job_info
   -> unit
   -> (BenchResults.t, string) Result.t Lwt.t
 
@@ -29,6 +30,7 @@ val bench_comment :
 
 val update_bench_status :
      bot_info:Bot_info.t
+  -> repo_config:Repo_config.t
   -> job_info:GitLab_types.ci_common_info GitLab_types.job_info
   -> string * string
   -> external_id:string
@@ -37,9 +39,8 @@ val update_bench_status :
 
 val run_bench :
      bot_info:Bot_info.t
-  -> org:string
+  -> repo_config:Repo_config.t
   -> team:string
-  -> gitlab_domain:string
   -> ?key_value_pairs:(string * string) list
   -> GitHub_types.comment_info
   -> unit Lwt.t
