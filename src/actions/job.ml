@@ -29,8 +29,8 @@ let job_action ~bot_info
       in
       match repo_config with
       | Some cfg when Repo_config.is_bench_job cfg build_name ->
-          Bench.update_bench_status ~bot_info ~job_info (gh_owner, gh_repo)
-            ~external_id ~number:pr_num
+          Bench.update_bench_status ~bot_info ~repo_config:cfg ~job_info
+            (gh_owner, gh_repo) ~external_id ~number:pr_num
       | _ -> (
         match job_info.build_status with
         | "failed" ->

@@ -50,6 +50,18 @@ app_id="31373"
  # Full GitHub @-mention used when the bot needs to alert someone
  alert_mention = "@rocq-prover/coqbot-maintainers"
  minimizer_url = "https://github.com/rocq-community/run-coq-bug-minimizer/actions"
+ contributing_url = "https://github.com/rocq-prover/rocq/blob/master/CONTRIBUTING.md"
+ # Posted when a PR is opened with the same head and base branch name.
+ # Placeholders: {base_branch}, {contributing_url}
+ same_branch_warning = """
+Hello, thanks for your pull request!
+Please avoid using {base_branch} as the name of your head branch when it matches the base branch.
+You may want to read the [contributing guide]({contributing_url}).
+"""
+ # Only allow bot merges into this base branch; omit to allow any base
+ mergeable_base_branch = "master"
+ # Post-merge reminder for files matching this regexp; omit to disable
+ overlay_path_regexp = "dev/ci/user-overlays/\\(.*\\)"
 
  [repositories.rocq.backporting]
  github_project_number = 11
@@ -65,8 +77,12 @@ app_id="31373"
  [repositories.rocq.jobs]
  # GitLab CI job name handled by bench status/results logic
  bench_job = "bench"
+ # CI variables for "@bot bench native"; omit or leave empty to disable that command
+ bench_native_variables = ["coq_native=yes"]
  # Use Rocq-specific failure summaries / allow-failure handling
  use_rocq_job_status = true
+ # Inject Rocq-specific GitLab CI variables on PR sync (SKIP_DOCKER, FULL_CI)
+ use_rocq_ci_options = true
  # Ignore missing Docker image manifest errors in CI traces
  silence_docker_manifest_errors = true
  # Successful jobs that get a GitHub status check linking to doc artifacts
