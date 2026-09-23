@@ -4,6 +4,7 @@ open Utils
 type repo_jobs_config =
   { bench_job: string option
   ; use_rocq_job_status: bool
+  ; use_rocq_ci_options: bool
   ; silence_docker_manifest_errors: bool
   ; doc_artifact_jobs: string list }
 
@@ -29,6 +30,7 @@ type t =
 let default_jobs =
   { bench_job= None
   ; use_rocq_job_status= false
+  ; use_rocq_ci_options= false
   ; silence_docker_manifest_errors= false
   ; doc_artifact_jobs= [] }
 
@@ -45,6 +47,8 @@ let parse_jobs tbl key =
               if String.is_empty s then None else Some s )
       ; use_rocq_job_status=
           key_bool jobs_tbl "use_rocq_job_status" |> Option.value ~default:false
+      ; use_rocq_ci_options=
+          key_bool jobs_tbl "use_rocq_ci_options" |> Option.value ~default:false
       ; silence_docker_manifest_errors=
           key_bool jobs_tbl "silence_docker_manifest_errors"
           |> Option.value ~default:false

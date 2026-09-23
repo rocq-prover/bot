@@ -31,6 +31,7 @@ let test_full_config () =
     [repositories.rocq.jobs]
     bench_job = "bench"
     use_rocq_job_status = true
+    use_rocq_ci_options = true
     silence_docker_manifest_errors = true
     doc_artifact_jobs = ["doc:refman", "doc:stdlib"]
     |}
@@ -47,6 +48,7 @@ let test_full_config () =
       (check int) "teams" 2 (List.length cfg.teams) ;
       (check (option string)) "bench_job" (Some "bench") cfg.jobs.bench_job ;
       (check bool) "use_rocq_job_status" true cfg.jobs.use_rocq_job_status ;
+      (check bool) "use_rocq_ci_options" true cfg.jobs.use_rocq_ci_options ;
       (check bool) "silence_docker_manifest_errors" true
         cfg.jobs.silence_docker_manifest_errors ;
       (check int) "doc_artifact_jobs" 2 (List.length cfg.jobs.doc_artifact_jobs) ;
@@ -74,6 +76,7 @@ let test_minimal_config () =
   | Some cfg ->
       (check (option int)) "project" None cfg.backporting.github_project_number ;
       (check bool) "use_rocq_job_status" false cfg.jobs.use_rocq_job_status ;
+      (check bool) "use_rocq_ci_options" false cfg.jobs.use_rocq_ci_options ;
       (check (list string)) "doc_artifact_jobs" [] cfg.jobs.doc_artifact_jobs
 
 let test_bad_github () =
@@ -152,6 +155,7 @@ let test_jobs_helper () =
     [repositories.rocq.jobs]
     bench_job = "bench"
     use_rocq_job_status = true
+    use_rocq_ci_options = true
     silence_docker_manifest_errors = true
     doc_artifact_jobs = ["doc:refman", "doc:stdlib"]
     |}
