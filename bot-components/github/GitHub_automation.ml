@@ -110,9 +110,8 @@ let rec merge_pull_request_action ~bot_info ~org ~pushers_team ?alert_mention
                       (* User not found in the team *)
                       Lwt.return_error
                         (f
-                           "@%s: You can't merge this PR because you're not a \
-                            member of the `@%s/%s` team. Look at the \
-                            contributing guide for how to join this team."
+                           "@%s: You can't merge this PR because you are not a \
+                            member of the `@%s/%s` team."
                            comment_info.author org pushers_team )
                   | Ok true -> (
                       GitHub_mutations.merge_pull_request ~bot_info ~pr_id:pr.id
@@ -360,8 +359,6 @@ let inform_user_not_in_contributors ~bot_info ~org ~team ~comment_info =
   GitHub_mutations.post_comment ~bot_info ~id:comment_info.issue.id
     ~message:
       (f
-         "Sorry, @%s, I only accept requests from members of the `@%s/%s` \
-          team. If you are a regular contributor, you can request to join the \
-          team by asking any core developer."
+         "Sorry, @%s, I only accept requests from members of the `@%s/%s` team."
          comment_info.author org team )
   >>= Utils.report_on_posting_comment
