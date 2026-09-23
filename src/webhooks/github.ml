@@ -177,6 +177,8 @@ let handle_comment_created ~bot_info ~key ~app_id ~github_bot_name
                       ~bot_info ~key ~app_id ~owner (fun ~bot_info ->
                         GitHub_automation.merge_pull_request_action ~bot_info
                           ~org ~pushers_team ?alert_mention:cfg.alert_mention
+                          ?mergeable_base_branch:cfg.mergeable_base_branch
+                          ?overlay_path_regexp:cfg.overlay_path_regexp
                           comment_info ) )
                   |> Lwt.async ;
                   Server.respond_string ~status:`OK

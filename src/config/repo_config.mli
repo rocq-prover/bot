@@ -24,6 +24,8 @@ type t =
   ; minimizer_url: string option
   ; contributing_url: string option
   ; same_branch_warning: string option
+  ; mergeable_base_branch: string option
+  ; overlay_path_regexp: string option
   ; jobs: repo_jobs_config }
 
 val make_repo_config_table : Toml.Types.table -> (string, t) Base.Hashtbl.t

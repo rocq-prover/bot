@@ -21,6 +21,8 @@ let test_full_config () =
     minimizer_url = "https://example.com"
     contributing_url = "https://example.com/CONTRIBUTING.md"
     same_branch_warning = "%s"
+    mergeable_base_branch = "master"
+    overlay_path_regexp = "dev/ci/user-overlays/\\(.*\\)"
 
     [repositories.rocq.backporting]
     github_project_number = 11
@@ -69,6 +71,11 @@ let test_full_config () =
         cfg.contributing_url ;
       (check bool) "same_branch_warning set" true
         (Option.is_some cfg.same_branch_warning) ;
+      (check (option string))
+        "mergeable_base_branch" (Some "master") cfg.mergeable_base_branch ;
+      (check (option string))
+        "overlay_path_regexp" (Some "dev/ci/user-overlays/\\(.*\\)")
+        cfg.overlay_path_regexp ;
       (check (option string))
         "trigger_ci team" (Some "contributors")
         (Repo_config.team_for_permission cfg "trigger_ci") ;

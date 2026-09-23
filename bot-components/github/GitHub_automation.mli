@@ -3,6 +3,8 @@ val merge_pull_request_action :
   -> org:string
   -> pushers_team:string
   -> ?alert_mention:string
+  -> ?mergeable_base_branch:string
+  -> ?overlay_path_regexp:string
   -> ?t:float
   -> GitHub_types.comment_info
   -> unit Lwt.t

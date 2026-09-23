@@ -58,6 +58,10 @@ Hello, thanks for your pull request!
 Please avoid using {base_branch} as the name of your head branch when it matches the base branch.
 You may want to read the [contributing guide]({contributing_url}).
 """
+ # Only allow bot merges into this base branch; omit to allow any base
+ mergeable_base_branch = "master"
+ # Post-merge reminder for files matching this regexp; omit to disable
+ overlay_path_regexp = "dev/ci/user-overlays/\\(.*\\)"
 
  [repositories.rocq.backporting]
  github_project_number = 11
