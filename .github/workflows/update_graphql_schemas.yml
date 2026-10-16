@@ -47,7 +47,6 @@ jobs:
 
       - name: Create pull request
         if: steps.changes.outputs.changed == 'true'
-        id: cpr
         uses: peter-evans/create-pull-request@v8
         with:
           token: ${{ github.token }}
@@ -61,17 +60,8 @@ jobs:
             failed, schema drift likely broke `graphql_ppx` typing (nullable
             fields, renames, deprecations) and needs a manual code fix before
             merge.
+
+            CI status was: ${{ steps.ci.outcome }}
           branch: chore/update-graphql-schemas
           delete-branch: true
           labels: dependencies
-
-      - name: Merge pull request
-        if: >-
-          steps.changes.outputs.changed == 'true' &&
-          steps.ci.outcome == 'success' &&
-          steps.cpr.outputs.pull-request-number != ''
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          gh pr merge --squash \
-            "${{ steps.cpr.outputs.pull-request-number }}"
