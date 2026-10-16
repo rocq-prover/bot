@@ -29,6 +29,9 @@ let push_action ~bot_info ~(repo_config : Repo_config.t) ~base_ref ~commits_msg
           | Ok (pr_id, backport_info) ->
               backport_info
               |> Lwt_list.iter_p (fun {backport_to} ->
+                  let source_ref =
+                    "refs/heads/" ^ repo_config.backporting.source_branch
+                  in
                   if "refs/heads/" ^ backport_to |> String.equal base_ref then
                     Lwt_io.printf
                       "PR was merged into the backporting branch directly.\n"
@@ -36,11 +39,7 @@ let push_action ~bot_info ~(repo_config : Repo_config.t) ~base_ref ~commits_msg
                     GitHub_automation.add_to_column ~bot_info ~organization
                       ~project:project_number ~backport_to (`PR_ID pr_id)
                       "Shipped"
-                  else if String.equal base_ref "refs/heads/master" then
-                    (* For now, we hard code that PRs are only backported
-                      from master.  In the future, we could make this
-                      configurable in the milestone description or in
-                      some configuration file. *)
+                  else if String.equal base_ref source_ref then
                     Lwt_io.printf "Backporting to %s was requested.\n"
                       backport_to
                     >>= fun () ->
@@ -50,7 +49,8 @@ let push_action ~bot_info ~(repo_config : Repo_config.t) ~base_ref ~commits_msg
                   else
                     Lwt_io.printf
                       "PR was merged into a branch that is not the backporting \
-                       branch nor the master branch.\n" )
+                       branch nor the %s branch.\n"
+                      repo_config.backporting.source_branch )
           | Error err ->
               Lwt_io.printf "Error: %s\n" err
         else if

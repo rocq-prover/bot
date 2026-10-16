@@ -4,7 +4,7 @@ type repo_jobs_config =
   ; silence_docker_manifest_errors: bool
   ; doc_artifact_jobs: string list }
 
-type backport_config = {github_project_number: int option}
+type backport_config = {github_project_number: int option; source_branch: string}
 
 type team_permission = {team_name: string; permission: string}
 

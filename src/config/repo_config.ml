@@ -7,7 +7,7 @@ type repo_jobs_config =
   ; silence_docker_manifest_errors: bool
   ; doc_artifact_jobs: string list }
 
-type backport_config = {github_project_number: int option}
+type backport_config = {github_project_number: int option; source_branch: string}
 
 type team_permission = {team_name: string; permission: string}
 
@@ -31,7 +31,7 @@ let default_jobs =
   ; silence_docker_manifest_errors= false
   ; doc_artifact_jobs= [] }
 
-let default_backporting = {github_project_number= None}
+let default_backporting = {github_project_number= None; source_branch= "master"}
 
 let parse_jobs tbl key =
   match subkey_table tbl key "jobs" with
@@ -55,7 +55,9 @@ let parse_backporting tbl key =
   | None ->
       default_backporting
   | Some bp_tbl ->
-      {github_project_number= key_int bp_tbl "github_project_number"}
+      { github_project_number= key_int bp_tbl "github_project_number"
+      ; source_branch=
+          key_value bp_tbl "source_branch" |> Option.value ~default:"master" }
 
 let parse_teams tbl k =
   match
