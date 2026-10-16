@@ -1,6 +1,8 @@
 type repo_jobs_config =
   { bench_job: string option
+  ; bench_native_variables: (string * string) list
   ; use_rocq_job_status: bool
+  ; use_rocq_ci_options: bool
   ; silence_docker_manifest_errors: bool
   ; doc_artifact_jobs: string list }
 
@@ -20,6 +22,10 @@ type t =
   ; alert_mention: string option
   ; teams: team_permission list
   ; minimizer_url: string option
+  ; contributing_url: string option
+  ; same_branch_warning: string option
+  ; mergeable_base_branch: string option
+  ; overlay_path_regexp: string option
   ; jobs: repo_jobs_config }
 
 val make_repo_config_table : Toml.Types.table -> (string, t) Base.Hashtbl.t
@@ -36,6 +42,8 @@ val find_by_backport_project :
 
 val is_bench_job : t -> string -> bool
 
+val bench_native_enabled : t -> bool
+
 val is_doc_artifact_job : t -> string -> bool
 
 val github_full_name : t -> string
@@ -44,3 +52,12 @@ val gitlab_job_url : t -> job_id:int -> string option
 
 val gitlab_pages_artifact_url :
   t -> job_id:int -> artifact:string -> string option
+
+val team_for_permission : t -> string -> string option
+
+val team_mention : t -> permission:string -> string option
+
+val should_warn_same_branch_name :
+  t -> same_branch_name:bool -> opened:bool -> bool
+
+val format_same_branch_warning : t -> base_branch:string -> string option
