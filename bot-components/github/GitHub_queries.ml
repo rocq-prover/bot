@@ -604,21 +604,17 @@ let get_base_and_head_checks ~bot_info ~owner ~repo ~pr_number ~base ~head =
             , extract_check_suites head_obj.checkSuites )
           with
           | (None | Some []), _ ->
-              Error
-                (f "No check suite %d for base commit %s/%s@%s." appId owner
-                   repo base )
+              Error (f "No pipeline for base commit %s/%s@%s." owner repo base)
           | _, (None | Some []) ->
-              Error
-                (f "No check suite %d for head commit %s/%s@%s." appId owner
-                   repo head )
+              Error (f "No pipeline for head commit %s/%s@%s." owner repo head)
           | Some (_ :: _ :: _), _ ->
               Error
-                (f "Got more than one checkSuite %d for base commit %s/%s@%s."
-                   appId owner repo base )
+                (f "Got more than one pipeline for base commit %s/%s@%s." owner
+                   repo base )
           | _, Some (_ :: _ :: _) ->
               Error
-                (f "Got more than one checkSuite %d for head commit %s/%s@%s."
-                   appId owner repo head )
+                (f "Got more than one pipeline for head commit %s/%s@%s." owner
+                   repo head )
           | Some [baseCheckSuite], Some [headCheckSuite] -> (
               let extract_check_runs checkRuns =
                 let open CheckRuns in
@@ -756,13 +752,11 @@ let get_pipeline_summary ~bot_info ~owner ~repo ~head =
           in
           match extract_check_suites head_obj.checkSuites with
           | None | Some [] ->
-              Error
-                (f "No check suite %d for head commit %s/%s@%s." appId owner
-                   repo head )
+              Error (f "No pipeline for head commit %s/%s@%s." owner repo head)
           | Some (_ :: _ :: _) ->
               Error
-                (f "Got more than one checkSuite %d for head commit %s/%s@%s."
-                   appId owner repo head )
+                (f "Got more than one pipeline for head commit %s/%s@%s." owner
+                   repo head )
           | Some [headCheckSuite] -> (
             match headCheckSuite.getPipelineSummaryCheckRuns with
             | None ->
