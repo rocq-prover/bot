@@ -7,6 +7,26 @@ open HTTP_utils
 open String_utils
 open Lwt.Infix
 
+type args = (string * string option) list
+
+let parse ~github_bot_name body =
+  if
+    string_match
+      ~regexp:
+        ( f "@%s:? [Bb]ench\\( *$\\| +\\(.*\\(\n.+\\)*\\)\\(\n\n\\|$\\)\\)"
+        @@ Str.quote github_bot_name )
+      body
+  then
+    match Str.matched_group 2 body with
+    | exception _ ->
+        Some (Result.Ok [])
+    | args ->
+        Some
+          (Result.map_error (parse_key_value_arguments args) ~f:(fun error ->
+               f "bench command could not parse key-value arguments: %s" error )
+          )
+  else None
+
 let parse_quantity table table_name =
   let regexp = {|.*TOP \([0-9]*\)|} in
   if string_match ~regexp table then

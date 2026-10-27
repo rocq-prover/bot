@@ -65,6 +65,20 @@ let handle_push_event_for_repos ~bot_info ~key ~app_id ~install_id ~owner ~repo
   | _ ->
       Server.respond_string ~status:`OK ~body:"Ignoring push event." ()
 
+module Commands = struct
+  type bench_args = Bench.args
+
+  type t =
+    | RunCI of {full_ci: bool option}
+    | Merge
+    | Bench of bench_args
+    | ResumeMinimize of (string * string list * Minimize_parser.minimize_parsed)
+    | Minimize of (string * string list)
+    | ParseError of string
+end
+
+open Commands
+
 (* Handles all comment-related events (minimization, CI commands, bench commands, etc.)*)
 let handle_comment_created ~bot_info ~key ~app_id ~github_bot_name
     ~gitlab_mapping ~github_mapping ~install_id
@@ -91,25 +105,69 @@ let handle_comment_created ~bot_info ~key ~app_id ~github_bot_name
       |> Lwt.async ;
       Server.respond_string ~status:`OK ~body:"Handling minimization." ()
   | None -> (
-    (* Since both ci minimization resumption and ci
-       minimization will match the resumption string, and we
-       don't want to parse "resume" as an option, we test
-       resumption first *)
-    match resume_ci_minimize_text_of_body body with
-    | Some (options, requests, bug_file) ->
-        (fun () ->
-          init_git_bare_repository ~bot_info
-          >>= fun () ->
-          Bot_components.Github_installations.action_as_github_app ~bot_info
-            ~key ~app_id ~owner:comment_info.issue.issue.owner (fun ~bot_info ->
-              Minimization.ci_minimize ~bot_info ~comment_info ~requests
-                ~comment_on_error:true ~options ~bug_file:(Some bug_file) ) )
-        |> Lwt.async ;
-        Server.respond_string ~status:`OK
-          ~body:"Handling CI minimization resumption." ()
-    | None -> (
-      match ci_minimize_text_of_body body with
-      | Some (options, requests) ->
+      let parse_run_ci body =
+        if
+          string_match
+            ~regexp:
+              ( f "@%s:? [Rr]un \\(full\\|light\\|\\) ?[Cc][Ii]"
+              @@ Str.quote github_bot_name )
+            body
+        then
+          match Str.matched_group 1 body with
+          | "full" ->
+              Some (RunCI {full_ci= Some true})
+          | "light" ->
+              Some (RunCI {full_ci= Some false})
+          | "" ->
+              Some (RunCI {full_ci= None})
+          | conf ->
+              Some
+                (ParseError
+                   (f "run ci command: unknown CI configuration %S" conf) )
+        else None
+      in
+      let parse_merge body =
+        if
+          string_match
+            ~regexp:(f "@%s:? [Mm]erge now" @@ Str.quote github_bot_name)
+            body
+        then Some Merge
+        else None
+      in
+      let parse () =
+        let open Option in
+        (* Since both ci minimization resumption and ci minimization will match the
+       resumption string, and we don't want to parse "resume" as an option, we
+       test resumption first *)
+        List.find_map
+          ~f:(fun fn -> fn body)
+          [ (fun body ->
+              resume_ci_minimize_text_of_body body >>| fun x -> ResumeMinimize x )
+          ; (fun body -> ci_minimize_text_of_body body >>| fun x -> Minimize x)
+          ; parse_run_ci
+          ; parse_merge
+          ; (fun body ->
+              Bench.parse ~github_bot_name body
+              >>| function
+              | Result.Ok args ->
+                  Commands.Bench args
+              | Result.Error error ->
+                  ParseError error ) ]
+      in
+      match parse () with
+      | Some (ResumeMinimize (options, requests, bug_file)) ->
+          (fun () ->
+            init_git_bare_repository ~bot_info
+            >>= fun () ->
+            Bot_components.Github_installations.action_as_github_app ~bot_info
+              ~key ~app_id ~owner:comment_info.issue.issue.owner
+              (fun ~bot_info ->
+                Minimization.ci_minimize ~bot_info ~comment_info ~requests
+                  ~comment_on_error:true ~options ~bug_file:(Some bug_file) ) )
+          |> Lwt.async ;
+          Server.respond_string ~status:`OK
+            ~body:"Handling CI minimization resumption." ()
+      | Some (Minimize (options, requests)) ->
           (fun () ->
             init_git_bare_repository ~bot_info
             >>= fun () ->
@@ -120,95 +178,63 @@ let handle_comment_created ~bot_info ~key ~app_id ~github_bot_name
                   ~comment_on_error:true ~options ~bug_file:None ) )
           |> Lwt.async ;
           Server.respond_string ~status:`OK ~body:"Handling CI minimization." ()
-      | None ->
-          if
-            string_match
-              ~regexp:
-                ( f "@%s:? [Rr]un \\(full\\|light\\|\\) ?[Cc][Ii]"
-                @@ Str.quote github_bot_name )
-              body
-            && comment_info.issue.pull_request
-            && String.equal comment_info.issue.issue.owner "rocq-prover"
-            && String.equal comment_info.issue.issue.repo "rocq"
-            && Option.is_some install_id
-          then
-            let full_ci =
-              match Str.matched_group 1 body with
-              | "full" ->
-                  Some true
-              | "light" ->
-                  Some false
-              | "" ->
-                  None
-              | _ ->
-                  failwith "Impossible group value."
-            in
-            init_git_bare_repository ~bot_info
-            >>= fun () ->
+      | Some (RunCI {full_ci})
+        when comment_info.issue.pull_request
+             && String.equal comment_info.issue.issue.owner "rocq-prover"
+             && String.equal comment_info.issue.issue.repo "rocq"
+             && Option.is_some install_id ->
+          init_git_bare_repository ~bot_info
+          >>= fun () ->
+          Bot_components.Github_installations.action_as_github_app ~bot_info
+            ~key ~app_id ~owner:comment_info.issue.issue.owner
+            (Pr_sync.run_ci_action ~comment_info ?full_ci ~gitlab_mapping
+               ~github_mapping () )
+      | Some Merge
+        when comment_info.issue.pull_request
+             && String.equal comment_info.issue.issue.owner "rocq-prover"
+             && String.equal comment_info.issue.issue.repo "rocq"
+             && Option.is_some install_id ->
+          (fun () ->
             Bot_components.Github_installations.action_as_github_app ~bot_info
               ~key ~app_id ~owner:comment_info.issue.issue.owner
-              (Pr_sync.run_ci_action ~comment_info ?full_ci ~gitlab_mapping
-                 ~github_mapping () )
-          else if
-            string_match
-              ~regexp:(f "@%s:? [Mm]erge now" @@ Str.quote github_bot_name)
-              body
-            && comment_info.issue.pull_request
-            && String.equal comment_info.issue.issue.owner "rocq-prover"
-            && String.equal comment_info.issue.issue.repo "rocq"
-            && Option.is_some install_id
-          then (
-            (fun () ->
-              Bot_components.Github_installations.action_as_github_app ~bot_info
-                ~key ~app_id ~owner:comment_info.issue.issue.owner
-                (fun ~bot_info ->
-                  GitHub_automation.merge_pull_request_action ~bot_info
-                    comment_info ) )
-            |> Lwt.async ;
-            Server.respond_string ~status:`OK
-              ~body:(f "Received a request to merge the PR.")
-              () )
-          else if
-            string_match
-              ~regexp:(f "@%s:? [Bb]ench native" @@ Str.quote github_bot_name)
-              body
-            && comment_info.issue.pull_request
-            && String.equal comment_info.issue.issue.owner "rocq-prover"
-            && String.equal comment_info.issue.issue.repo "rocq"
-            && Option.is_some install_id
-          then (
-            (fun () ->
-              Bot_components.Github_installations.action_as_github_app ~bot_info
-                ~key ~app_id ~owner:comment_info.issue.issue.owner
-                (fun ~bot_info ->
-                  Bench.run_bench ~bot_info
-                    ~key_value_pairs:[("coq_native", "yes")]
-                    comment_info ) )
-            |> Lwt.async ;
-            Server.respond_string ~status:`OK
-              ~body:(f "Received a request to start the bench.")
-              () )
-          else if
-            string_match
-              ~regexp:(f "@%s:? [Bb]ench" @@ Str.quote github_bot_name)
-              body
-            && comment_info.issue.pull_request
-            && String.equal comment_info.issue.issue.owner "rocq-prover"
-            && String.equal comment_info.issue.issue.repo "rocq"
-            && Option.is_some install_id
-          then (
-            (fun () ->
-              Bot_components.Github_installations.action_as_github_app ~bot_info
-                ~key ~app_id ~owner:comment_info.issue.issue.owner
-                (fun ~bot_info -> Bench.run_bench ~bot_info comment_info ) )
-            |> Lwt.async ;
-            Server.respond_string ~status:`OK
-              ~body:(f "Received a request to start the bench.")
-              () )
-          else
-            Server.respond_string ~status:`OK
-              ~body:(f "Unhandled comment: %s" body)
-              () ) )
+              (fun ~bot_info ->
+                GitHub_automation.merge_pull_request_action ~bot_info
+                  comment_info ) )
+          |> Lwt.async ;
+          Server.respond_string ~status:`OK
+            ~body:(f "Received a request to merge the PR.")
+            ()
+      | Some (Bench args)
+        when comment_info.issue.pull_request
+             && String.equal comment_info.issue.issue.owner "rocq-prover"
+             && String.equal comment_info.issue.issue.repo "rocq"
+             && Option.is_some install_id ->
+          let key_value_pairs =
+            List.map ~f:(fun (k, v) -> (k, Option.value ~default:"yes" v)) args
+          in
+          (fun () ->
+            Bot_components.Github_installations.action_as_github_app ~bot_info
+              ~key ~app_id ~owner:comment_info.issue.issue.owner
+              (fun ~bot_info ->
+                Bench.run_bench ~bot_info ~key_value_pairs comment_info ) )
+          |> Lwt.async ;
+          Server.respond_string ~status:`OK
+            ~body:(f "Received a request to start the bench.")
+            ()
+      | Some (ParseError error) ->
+          (fun () ->
+            GitHub_mutations.post_comment ~bot_info ~message:error
+              ~id:comment_info.issue.id
+            >>= Utils.report_on_posting_comment )
+          |> Lwt.async ;
+          Server.respond_string ~status:`OK ~body:"Invalid bench arguments." ()
+      | Some (RunCI _ | Merge | Bench _) ->
+          Server.respond_string ~status:`OK
+            ~body:"Command recognized but not allowed in this context." ()
+      | None ->
+          Server.respond_string ~status:`OK
+            ~body:(f "Unhandled comment: %s" body)
+            () )
 
 let handle_github_webhook ~bot_info ~key ~app_id ~github_bot_name
     ~gitlab_mapping ~github_mapping ~repo_config_table ~github_webhook_secret
