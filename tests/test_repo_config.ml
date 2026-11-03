@@ -3,9 +3,13 @@ open Alcotest
 
 let parse s = Repo_config.make_repo_config_table (Utils.toml_of_string s)
 
+let same_branch_warning_template =
+  "Do not use {base_branch}. See {contributing_url}."
+
 let test_full_config () =
   let toml =
-    {|
+    Printf.sprintf
+      {|
     [repositories.rocq]
     github = "rocq-prover/rocq"
     gitlab_domain = "gitlab.inria.fr"
@@ -15,24 +19,31 @@ let test_full_config () =
     org_name = "rocq-prover"
     alert_mention = "@rocq-prover/coqbot-maintainers"
     minimizer_url = "https://example.com"
+    contributing_url = "https://example.com/CONTRIBUTING.md"
+    same_branch_warning = "%s"
+    mergeable_base_branch = "master"
+    overlay_path_regexp = "dev/ci/user-overlays/\\(.*\\)"
 
     [repositories.rocq.backporting]
     github_project_number = 11
 
     [[repositories.rocq.teams]]
     team_name = "contributors"
-    permission = "contribute"
+    permission = "trigger_ci"
 
     [[repositories.rocq.teams]]
     team_name = "pushers"
-    permission = "push"
+    permission = "merge_pr"
 
     [repositories.rocq.jobs]
     bench_job = "bench"
+    bench_native_variables = ["coq_native=yes"]
     use_rocq_job_status = true
+    use_rocq_ci_options = true
     silence_docker_manifest_errors = true
     doc_artifact_jobs = ["doc:refman", "doc:stdlib"]
     |}
+      same_branch_warning_template
   in
   let tbl = parse toml in
   match Repo_config.find_by_github ~owner:"rocq-prover" ~repo:"rocq" tbl with
@@ -45,10 +56,36 @@ let test_full_config () =
         "alert" (Some "@rocq-prover/coqbot-maintainers") cfg.alert_mention ;
       (check int) "teams" 2 (List.length cfg.teams) ;
       (check (option string)) "bench_job" (Some "bench") cfg.jobs.bench_job ;
+      (check (list (pair string string)))
+        "bench_native_variables"
+        [("coq_native", "yes")]
+        cfg.jobs.bench_native_variables ;
+      (check bool) "bench_native_enabled" true
+        (Repo_config.bench_native_enabled cfg) ;
       (check bool) "use_rocq_job_status" true cfg.jobs.use_rocq_job_status ;
+      (check bool) "use_rocq_ci_options" true cfg.jobs.use_rocq_ci_options ;
       (check bool) "silence_docker_manifest_errors" true
         cfg.jobs.silence_docker_manifest_errors ;
-      (check int) "doc_artifact_jobs" 2 (List.length cfg.jobs.doc_artifact_jobs)
+      (check int) "doc_artifact_jobs" 2 (List.length cfg.jobs.doc_artifact_jobs) ;
+      (check (option string))
+        "contribute_url" (Some "https://example.com/CONTRIBUTING.md")
+        cfg.contributing_url ;
+      (check bool) "same_branch_warning set" true
+        (Option.is_some cfg.same_branch_warning) ;
+      (check (option string))
+        "mergeable_base_branch" (Some "master") cfg.mergeable_base_branch ;
+      (check (option string))
+        "overlay_path_regexp" (Some "dev/ci/user-overlays/\\(.*\\)")
+        cfg.overlay_path_regexp ;
+      (check (option string))
+        "trigger_ci team" (Some "contributors")
+        (Repo_config.team_for_permission cfg "trigger_ci") ;
+      (check (option string))
+        "merge_pr team" (Some "pushers")
+        (Repo_config.team_for_permission cfg "merge_pr") ;
+      (check (option string))
+        "team mention" (Some "@rocq-prover/pushers")
+        (Repo_config.team_mention cfg ~permission:"merge_pr")
 
 let test_minimal_config () =
   let tbl = parse {|
@@ -61,6 +98,9 @@ let test_minimal_config () =
   | Some cfg ->
       (check (option int)) "project" None cfg.backporting.github_project_number ;
       (check bool) "use_rocq_job_status" false cfg.jobs.use_rocq_job_status ;
+      (check bool) "use_rocq_ci_options" false cfg.jobs.use_rocq_ci_options ;
+      (check bool) "bench_native_enabled" false
+        (Repo_config.bench_native_enabled cfg) ;
       (check (list string)) "doc_artifact_jobs" [] cfg.jobs.doc_artifact_jobs
 
 let test_bad_github () =
@@ -138,8 +178,10 @@ let test_jobs_helper () =
 
     [repositories.rocq.jobs]
     bench_job = "bench"
+    bench_native_variables = ["coq_native=yes"]
     use_rocq_job_status = true
-    silence_docker_manifest_errors = true 
+    use_rocq_ci_options = true
+    silence_docker_manifest_errors = true
     doc_artifact_jobs = ["doc:refman", "doc:stdlib"]
     |}
   in
@@ -182,6 +224,52 @@ let test_jobs_helper () =
     "job url missing" None
     (Repo_config.gitlab_job_url cfg_off ~job_id:1)
 
+let test_same_branch_warning () =
+  let with_warning =
+    parse
+      (Printf.sprintf
+         {|
+    [repositories.rocq]
+    github = "rocq-prover/rocq"
+    contributing_url = "https://example.com/CONTRIBUTING.md"
+    same_branch_warning = "%s"
+    |}
+         same_branch_warning_template )
+  in
+  let without_warning =
+    parse
+      {|
+    [repositories.demo]
+    github = "my-org/my-repo"
+    contributing_url = "https://example.com/CONTRIBUTING.md"
+    |}
+  in
+  let cfg_on =
+    Option.value_exn
+      (Repo_config.find_by_github ~owner:"rocq-prover" ~repo:"rocq" with_warning)
+  in
+  let cfg_off =
+    Option.value_exn
+      (Repo_config.find_by_github ~owner:"my-org" ~repo:"my-repo"
+         without_warning )
+  in
+  (check bool) "with warning + opened + same branch" true
+    (Repo_config.should_warn_same_branch_name cfg_on ~opened:true
+       ~same_branch_name:true ) ;
+  (check bool) "without warning" false
+    (Repo_config.should_warn_same_branch_name cfg_off ~opened:true
+       ~same_branch_name:true ) ;
+  (check bool) "different branch" false
+    (Repo_config.should_warn_same_branch_name cfg_on ~opened:true
+       ~same_branch_name:false ) ;
+  (check bool) "not opened" false
+    (Repo_config.should_warn_same_branch_name cfg_on ~opened:false
+       ~same_branch_name:true ) ;
+  (check (option string))
+    "formatted message"
+    (Some "Do not use master. See https://example.com/CONTRIBUTING.md.")
+    (Repo_config.format_same_branch_warning cfg_on ~base_branch:"master")
+
 let () =
   run "Repo_config tests"
     [ ( "parse"
@@ -191,4 +279,5 @@ let () =
         ; ("missing section", `Quick, test_missing_section)
         ; ("find miss", `Quick, test_find_miss)
         ; ("backport enabled", `Quick, test_backport_enabled)
-        ; ("jobs", `Quick, test_jobs_helper) ] ) ]
+        ; ("jobs", `Quick, test_jobs_helper)
+        ; ("same branch warning", `Quick, test_same_branch_warning) ] ) ]
