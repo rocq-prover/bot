@@ -18,6 +18,7 @@ let test_full_config () =
 
     [repositories.rocq.backporting]
     github_project_number = 11
+    source_branch = "master"
 
     [[repositories.rocq.teams]]
     team_name = "contributors"
@@ -41,6 +42,7 @@ let test_full_config () =
   | Some cfg ->
       (check (option int))
         "project" (Some 11) cfg.backporting.github_project_number ;
+      (check string) "source_branch" "master" cfg.backporting.source_branch ;
       (check (option string))
         "alert" (Some "@rocq-prover/coqbot-maintainers") cfg.alert_mention ;
       (check int) "teams" 2 (List.length cfg.teams) ;
@@ -60,6 +62,8 @@ let test_minimal_config () =
       fail "expected config"
   | Some cfg ->
       (check (option int)) "project" None cfg.backporting.github_project_number ;
+      (check string) "source_branch default" "master"
+        cfg.backporting.source_branch ;
       (check bool) "use_rocq_job_status" false cfg.jobs.use_rocq_job_status ;
       (check (list string)) "doc_artifact_jobs" [] cfg.jobs.doc_artifact_jobs
 
@@ -182,6 +186,24 @@ let test_jobs_helper () =
     "job url missing" None
     (Repo_config.gitlab_job_url cfg_off ~job_id:1)
 
+let test_backport_source_branch () =
+  let tbl =
+    parse
+      {|
+    [repositories.demo]
+    github = "my-org/my-repo"
+
+    [repositories.demo.backporting]
+    github_project_number = 3
+    source_branch = "main"
+    |}
+  in
+  match Repo_config.find_by_github ~owner:"my-org" ~repo:"my-repo" tbl with
+  | None ->
+      fail "expected config"
+  | Some cfg ->
+      (check string) "source_branch" "main" cfg.backporting.source_branch
+
 let () =
   run "Repo_config tests"
     [ ( "parse"
@@ -191,4 +213,5 @@ let () =
         ; ("missing section", `Quick, test_missing_section)
         ; ("find miss", `Quick, test_find_miss)
         ; ("backport enabled", `Quick, test_backport_enabled)
-        ; ("jobs", `Quick, test_jobs_helper) ] ) ]
+        ; ("jobs", `Quick, test_jobs_helper)
+        ; ("backport source_branch", `Quick, test_backport_source_branch) ] ) ]

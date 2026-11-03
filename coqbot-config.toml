@@ -53,6 +53,7 @@ app_id="31373"
 
  [repositories.rocq.backporting]
  github_project_number = 11
+ source_branch = "master"
 
  [[repositories.rocq.teams]]
  team_name = "contributors"
