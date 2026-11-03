@@ -48,7 +48,11 @@ let test_full_config () =
       (check bool) "use_rocq_job_status" true cfg.jobs.use_rocq_job_status ;
       (check bool) "silence_docker_manifest_errors" true
         cfg.jobs.silence_docker_manifest_errors ;
-      (check int) "doc_artifact_jobs" 2 (List.length cfg.jobs.doc_artifact_jobs)
+      (check int) "doc_artifact_jobs" 2 (List.length cfg.jobs.doc_artifact_jobs) ;
+      (check (option (triple string string string)))
+        "mirror coords"
+        (Some ("gitlab.inria.fr", "coq", "coq"))
+        (Repo_config.gitlab_mirror_coords cfg)
 
 let test_minimal_config () =
   let tbl = parse {|
@@ -182,6 +186,69 @@ let test_jobs_helper () =
     "job url missing" None
     (Repo_config.gitlab_job_url cfg_off ~job_id:1)
 
+let push_would_act cfg =
+  Repo_config.backport_enabled cfg
+  || Option.is_some (Repo_config.gitlab_mirror_coords cfg)
+
+let test_push_mirror_routing () =
+  let tbl =
+    parse
+      {|
+    [repositories.mirror]
+    github = "math-comp/math-comp"
+    gitlab_domain = "gitlab.inria.fr"
+    gitlab_owner = "math-comp"
+    gitlab_repo = "math-comp"
+
+    [repositories.partial]
+    github = "my-org/partial"
+    gitlab_domain = "gitlab.inria.fr"
+
+    [repositories.backport_only]
+    github = "my-org/backport-only"
+    github_installation_id = 1
+
+    [repositories.backport_only.backporting]
+    github_project_number = 3
+
+    [repositories.noop]
+    github = "my-org/noop"
+    |}
+  in
+  let mirror =
+    Option.value_exn
+      (Repo_config.find_by_github ~owner:"math-comp" ~repo:"math-comp" tbl)
+  in
+  let partial =
+    Option.value_exn
+      (Repo_config.find_by_github ~owner:"my-org" ~repo:"partial" tbl)
+  in
+  let backport_only =
+    Option.value_exn
+      (Repo_config.find_by_github ~owner:"my-org" ~repo:"backport-only" tbl)
+  in
+  let noop =
+    Option.value_exn
+      (Repo_config.find_by_github ~owner:"my-org" ~repo:"noop" tbl)
+  in
+  (check (option (triple string string string)))
+    "configured mirror"
+    (Some ("gitlab.inria.fr", "math-comp", "math-comp"))
+    (Repo_config.gitlab_mirror_coords mirror) ;
+  (check bool) "configured push acts" true (push_would_act mirror) ;
+  (check (option (triple string string string)))
+    "partial gitlab coords" None
+    (Repo_config.gitlab_mirror_coords partial) ;
+  (check bool) "partial push no-op" false (push_would_act partial) ;
+  (check bool) "backport-only acts" true (push_would_act backport_only) ;
+  (check (option (triple string string string)))
+    "noop no mirror" None
+    (Repo_config.gitlab_mirror_coords noop) ;
+  (check bool) "noop push no-op" false (push_would_act noop) ;
+  (check bool) "unconfigured repo no-op" true
+    (Option.is_none
+       (Repo_config.find_by_github ~owner:"other" ~repo:"repo" tbl) )
+
 let () =
   run "Repo_config tests"
     [ ( "parse"
@@ -191,4 +258,5 @@ let () =
         ; ("missing section", `Quick, test_missing_section)
         ; ("find miss", `Quick, test_find_miss)
         ; ("backport enabled", `Quick, test_backport_enabled)
-        ; ("jobs", `Quick, test_jobs_helper) ] ) ]
+        ; ("jobs", `Quick, test_jobs_helper)
+        ; ("push mirror routing", `Quick, test_push_mirror_routing) ] ) ]
