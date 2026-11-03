@@ -71,5 +71,6 @@ val pipeline_action :
   -> gitlab_mapping:(string, string) Base.Hashtbl.t
   -> ?full_ci_check_repo:(string * string) option
   -> ?auto_minimize_on_failure:(string * string) option
+  -> ?minimizer_url:string option
   -> unit
   -> unit Lwt.t

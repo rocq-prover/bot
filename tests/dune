@@ -48,3 +48,8 @@
  (name test_string_utils)
  (modules test_string_utils)
  (libraries alcotest bot-components base))
+
+(test
+ (name test_minimization)
+ (modules test_minimization)
+ (libraries alcotest coq-bot.ci base))
